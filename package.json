@@ -46,7 +46,7 @@
     "imgur": "^2.4.2",
     "imgur-anonymous-uploader": "^1.1.6",
     "lilyweight": "^2.7.2",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.1",
     "mime-types": "^2.1.35",
     "mineflayer": "^4.25.0",
     "mkdirp": "^3.0.1",
