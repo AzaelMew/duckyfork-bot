@@ -44,7 +44,7 @@
     "hypixel-api-reborn": "^11.3.7",
     "image-type": "^6.0.0",
     "imgur": "^2.4.2",
-    "imgur-anonymous-uploader": "^1.1.6",
+    "imgur-anonymous-uploader": "^1.1.9",
     "lilyweight": "^2.7.2",
     "lodash": "^4.17.21",
     "mime-types": "^2.1.35",
