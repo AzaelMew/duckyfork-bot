@@ -1,0 +1,113 @@
+const CommunicationBridge = require("../contracts/CommunicationBridge.js");
+const { replaceVariables, generateID } = require("../contracts/helperFunctions.js");
+const StateHandler = require("./handlers/StateHandler.js");
+const ErrorHandler = require("./handlers/ErrorHandler.js");
+const ChatHandler = require("./handlers/ChatHandler.js");
+const CommandHandler = require("./CommandHandler.js");
+const config = require("../../config.json");
+const mineflayer = require("mineflayer");
+const Logger = require("../Logger.js");
+const Filter = require("bad-words");
+const axios = require("axios");
+const { Console } = require("winston/lib/winston/transports/index.js");
+const filter = new Filter();
+const fileredWords = config.discord.other.filterWords ?? "";
+filter.addWords(...fileredWords);
+async function apicall(message) {
+  try {
+    const response = await axios.post('http://192.168.0.6:3001/api/command', { message: message }, { headers: { Authorization: "yonkowashere" } })
+  } catch (error) {
+    if (error.code === 'ECONNREFUSED') {
+      console.error('Connection refused: Aria is offline');
+    } else {
+      console.error('An error occurred:', error.message);
+    }
+  }
+}
+class MinecraftManager extends CommunicationBridge {
+  constructor(app) {
+    super();
+
+    this.app = app;
+
+    this.stateHandler = new StateHandler(this);
+    this.errorHandler = new ErrorHandler(this);
+    this.chatHandler = new ChatHandler(this, new CommandHandler(this));
+  }
+
+  connect() {
+    global.bot = this.createBotConnection();
+    this.bot = bot;
+
+    this.errorHandler.registerEvents(this.bot);
+    this.stateHandler.registerEvents(this.bot);
+    this.chatHandler.registerEvents(this.bot);
+
+    require("./other/eventNotifier.js");
+    require("./other/autoClaimAndInactive.js")
+    require("./other/skyblockNotifier.js");
+  }
+
+  createBotConnection() {
+    return mineflayer.createBot({
+      host: "mc.hypixel.net",
+      port: 25565,
+      auth: "microsoft",
+      version: "1.8.9",
+      viewDistance: "tiny",
+      chatLengthLimit: 256,
+      profilesFolder: "./auth-cache",
+    });
+  }
+
+  async onBroadcast({ channel, username, message, replyingTo, discord }) {
+    Logger.broadcastMessage(`${username}: ${message}`, "Minecraft");
+    if (this.bot.player === undefined) {
+      return;
+    }
+
+    if (channel === config.discord.channels.debugChannel && config.discord.channels.debugMode === true) {
+      return this.bot.chat(message);
+    }
+
+    if (config.discord.other.filterMessages) {
+      message = filter.clean(message);
+      username = filter.clean(username);
+    }
+
+    message = replaceVariables(config.minecraft.bot.messageFormat, { username, message });
+
+    const chat = channel === config.discord.channels.officerChannel ? "/oc" : "/gc";
+
+    if (replyingTo) {
+      message = message.replace(username, `${username} replying to ${replyingTo}`);
+    }
+
+    let successfullySent = false;
+    const messageListener = (receivedMessage) => {
+      receivedMessage = receivedMessage.toString();
+
+      if (
+        receivedMessage.includes(message) &&
+        (this.chatHandler.isGuildMessage(receivedMessage) || this.chatHandler.isOfficerMessage(receivedMessage))
+      ) {
+        bot.removeListener("message", messageListener);
+        successfullySent = true;
+      }
+    };
+
+    await apicall(`${chat} ${message} ${generateID(10)}`)
+
+    bot.on("message", messageListener);
+    this.bot.chat(`${chat} ${message} ${generateID(10)}`);
+
+    setTimeout(() => {
+      bot.removeListener("message", messageListener);
+      if (successfullySent === true) {
+        return;
+      }
+    }, 500);
+  }
+}
+
+module.exports = MinecraftManager;
