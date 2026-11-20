@@ -4,7 +4,7 @@ const config = require("../../../config.json");
 const axios = require("axios");
 const fs = require('fs');
 const { env } = require('process');
-const { getNetworth } = require('skyhelper-networth');
+const { ProfileNetworthCalculator } = require('skyhelper-networth');
 
 async function getUUIDFromUsername(username) {
     if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
@@ -75,7 +75,7 @@ async function getNetworthFromUUID(name) {
   const profileData = await profile.members[name];
   const bankBalance = await profile.banking?.balance;
   
-  const networth = await getNetworth(profileData, bankBalance, { v2Endpoint: true, museumData });
+  const networth = await new ProfileNetworthCalculator(profileData, museumData, bankBalance).getNetworth({ onlyNetworth: true });
   let total = networth.networth ?? 0
   let purse = networth?.purse ?? 0
   let bank = networth?.bank ?? 0
