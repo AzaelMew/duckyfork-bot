@@ -1,0 +1,153 @@
+name: pr-gate
+
+# Deterministic gate for pull requests. Runs only on `pull_request` (never
+# `pull_request_target`), so PR code executes on a throwaway runner with a
+# read-only token and no repository secrets.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: setup node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 18
+          cache: npm
+
+      # --ignore-scripts on purpose: the PR controls package.json, so it must not
+      # be able to run install scripts on the runner. The only native dependency
+      # the loaded code needs (canvas) is stubbed by scripts/stubs/canvas.js,
+      # wired in through scripts/smoke-load.js and jest.config.js.
+      - name: install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: config schema
+        run: cp config.example.json config.json && node scripts/check-config.js config.json
+
+      - name: syntax
+        run: git ls-files 'src/**/*.js' 'API/**/*.js' index.js | xargs -n1 node --check
+
+      - name: smoke-load every command module
+        run: node scripts/smoke-load.js
+
+      - name: lint ratchet (changed files only)
+        run: node scripts/lint-ratchet.js origin/${{ github.base_ref }}
+
+      - name: jest
+        run: npx jest --forceExit --runInBand
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # The pinned release binary is used instead of gitleaks/gitleaks-action:
+      # no third-party action code runs in this job, and this account type does
+      # not have to depend on how the action handles licences. Only the commits
+      # this PR adds are scanned, so pre-existing history can never make the
+      # gate permanently red. The sha256 is the published checksum for this
+      # release (gitleaks_8.30.1_checksums.txt).
+      - name: gitleaks
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          ( cd "$RUNNER_TEMP" && echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c - )
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose \
+            --log-opts="origin/${{ github.base_ref }}..HEAD"
+
+      # Hardcoded credentials, LAN peer IPs and host-specific paths in added
+      # lines; config/cache/data/log files anywhere in the diff. Only the
+      # offending file names are printed - the matched values never are.
+      - name: forbidden patterns
+        run: |
+          set -euo pipefail
+          BASE="origin/${{ github.base_ref }}"
+          DIFF="$RUNNER_TEMP/pr.diff"
+          git diff "$BASE...HEAD" -U0 > "$DIFF"
+
+          read -r -d '' PATTERN <<'PATTERN_EOF' || true
+          Authorization:[[:space:]]*["'][^"']{8,}["']|192[.]168[.]0[.][0-9]+|tempest[/]|imgur[^[:space:]"']*[A-Za-z0-9_-]{20,}
+          PATTERN_EOF
+
+          HITS=$(PATTERN="$PATTERN" awk 'BEGIN { p = ENVIRON["PATTERN"] } /^\+\+\+ b\// { f = substr($0, 7) } /^\+/ && $0 ~ p { print f }' "$DIFF" | sort -u || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::forbidden pattern in added lines (values not printed)"
+            printf '%s\n' "$HITS"
+            exit 1
+          fi
+          echo "no forbidden patterns in added lines"
+
+          git diff --name-only "$BASE...HEAD" > "$RUNNER_TEMP/names.txt"
+          if grep -qE '(^|/)config[.]json$|(^|/)auth-cache/|(^|/)data/|^logs/' "$RUNNER_TEMP/names.txt"; then
+            echo "::error::config.json, auth-cache/, data/ or logs/ must not be committed"
+            grep -E '(^|/)config[.]json$|(^|/)auth-cache/|(^|/)data/|^logs/' "$RUNNER_TEMP/names.txt"
+            exit 1
+          fi
+          echo "no config/cache/data/log files in the diff"
+
+  risk:
+    name: risk
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: setup node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 18
+
+      # The dependencies and the example config are needed so pr-risk.js can
+      # actually require() the changed modules (base worktree and head) and
+      # compare their real export shape instead of falling back to a text scan.
+      # --ignore-scripts for the same reason as in verify.
+      - name: install
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          cp config.example.json config.json
+
+      # Records the classification, never fails on "high": a human decides.
+      - name: classify
+        run: node scripts/pr-risk.js "origin/${{ github.base_ref }}" | tee risk.json
+
+      - name: summary
+        run: |
+          {
+            echo '```json'
+            cat risk.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: upload risk artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: risk
+          path: risk.json
+          if-no-files-found: error
