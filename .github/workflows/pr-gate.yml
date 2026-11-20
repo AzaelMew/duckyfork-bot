@@ -124,6 +124,15 @@ jobs:
         with:
           node-version: 18
 
+      # The dependencies and the example config are needed so pr-risk.js can
+      # actually require() the changed modules (base worktree and head) and
+      # compare their real export shape instead of falling back to a text scan.
+      # --ignore-scripts for the same reason as in verify.
+      - name: install
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          cp config.example.json config.json
+
       # Records the classification, never fails on "high": a human decides.
       - name: classify
         run: node scripts/pr-risk.js "origin/${{ github.base_ref }}" | tee risk.json
