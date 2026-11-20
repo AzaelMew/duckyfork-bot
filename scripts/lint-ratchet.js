@@ -147,6 +147,19 @@ function main() {
 
   let exitCode = 0;
   try {
+    // The base tree needs the gitignored config.json (half the modules require
+    // it, and import/no-unresolved flags it) and node_modules (import/
+    // no-unresolved also checks package imports), otherwise every pre-existing
+    // error would be inflated at base and the ratchet would be toothless.
+    const baseConfig = path.join(worktree, "config.json");
+    if (!fs.existsSync(baseConfig)) {
+      fs.copyFileSync(path.join(ROOT, "config.example.json"), baseConfig);
+    }
+    const baseModules = path.join(worktree, "node_modules");
+    if (!fs.existsSync(baseModules)) {
+      fs.symlinkSync(path.join(ROOT, "node_modules"), baseModules, "dir");
+    }
+
     const baseFiles = files.filter((file) => fs.existsSync(path.join(worktree, file)));
     const baseCounts = baseFiles.length > 0 ? lint(worktree, baseFiles, path.join(worktree, ".eslintrc")) : new Map();
     const base = new Map();

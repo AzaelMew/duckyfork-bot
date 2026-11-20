@@ -21,9 +21,19 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const Module = require("module");
 const { spawnSync } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
+
+// Loading changed modules must not need the native canvas binding: the gate
+// installs with --ignore-scripts (same stub as scripts/smoke-load.js).
+const canvasStub = require("./stubs/canvas.js");
+const originalLoad = Module._load;
+Module._load = function (request) {
+  if (request === "canvas") return canvasStub;
+  return originalLoad.apply(this, arguments);
+};
 
 // Files where a mistake can take a live bot down or leak a token.
 const HIGH_RISK_PATHS = [
@@ -111,7 +121,7 @@ function parseDiff(commit, baseRef) {
       return { status: parts[0].charAt(0), path: parts[parts.length - 1] };
     });
 
-  return { touched: touched.length > 0 ? touched : entries.map((entry) => entry.path), entries, addedByFile, baseRef };
+  return { touched: [...new Set([...touched, ...entries.map((entry) => entry.path)])], entries, addedByFile, baseRef };
 }
 
 function analyzeDependencies(commit, result, addReason) {
@@ -187,6 +197,40 @@ function exportNames(source) {
   return [...names].sort();
 }
 
+// The loaders use the value, not the source: src/minecraft/CommandHandler.js
+// does `new (require(file))(minecraft)` (so name/description/onCommand matter)
+// and src/discord/CommandHandler.js registers the exported object as a slash
+// command (name/description/execute). Requiring the module is therefore the
+// honest check - for a class, Object.keys() is empty, so the prototype methods
+// are what actually has to stay stable.
+function exportShape(file) {
+  const exported = require(file);
+  const names = new Set();
+  const collectKeys = (value) => {
+    if (value === null || (typeof value !== "object" && typeof value !== "function")) return;
+    for (const key of Object.keys(value)) names.add(key);
+  };
+
+  collectKeys(exported);
+  if (typeof exported === "function" && exported.prototype) {
+    for (const key of Object.getOwnPropertyNames(exported.prototype)) {
+      if (key !== "constructor") names.add(`prototype.${key}`);
+    }
+  }
+  if (names.size === 0) names.add("(default)");
+  return [...names].sort();
+}
+
+function exportShapeOrSource(file, source) {
+  try {
+    return { names: exportShape(file), source: "require" };
+  } catch (error) {
+    // Loading can legitimately fail (native deps, top-level throws); fall back
+    // to the static scan so the check still says something useful.
+    return { names: exportNames(source), source: `static (${error.message.split("\n")[0]})` };
+  }
+}
+
 function analyzeExports(commit, result, addReason) {
   const watched = result.touched.filter((file) => EXPORT_WATCHED.some((pattern) => pattern.test(file)));
   if (watched.length === 0) return;
@@ -199,16 +243,27 @@ function analyzeExports(commit, result, addReason) {
   }
 
   try {
+    // Same reason as in lint-ratchet.js: the copied config and the symlinked
+    // node_modules are needed for the modules to load at all.
+    const baseConfig = path.join(worktree, "config.json");
+    if (!fs.existsSync(baseConfig)) {
+      fs.copyFileSync(path.join(ROOT, "config.example.json"), baseConfig);
+    }
+    const baseModules = path.join(worktree, "node_modules");
+    if (!fs.existsSync(baseModules)) {
+      fs.symlinkSync(path.join(ROOT, "node_modules"), baseModules, "dir");
+    }
+
     for (const file of watched) {
       const headPath = path.join(ROOT, file);
       const basePath = path.join(worktree, file);
       if (!fs.existsSync(headPath)) continue; // deleted at head, nothing to compare
 
-      const headSource = fs.readFileSync(headPath, "utf8");
       const baseSource = fs.existsSync(basePath) ? fs.readFileSync(basePath, "utf8") : "";
+      const headSource = fs.readFileSync(headPath, "utf8");
 
-      const before = new Set(exportNames(baseSource));
-      const after = new Set(exportNames(headSource));
+      const before = new Set(exportShapeOrSource(basePath, baseSource).names);
+      const after = new Set(exportShapeOrSource(headPath, headSource).names);
       const addedNames = [...after].filter((name) => !before.has(name)).sort();
       const removedNames = [...before].filter((name) => !after.has(name)).sort();
       if (addedNames.length === 0 && removedNames.length === 0) continue;
@@ -293,6 +348,14 @@ function analyzeSends(parsed, result, addReason) {
     if (addedCalls.length > 1) {
       sends.notes.push("more than one added send call (every send is mirrored to the peer guild)");
       addReason(`extra send calls in ${file}: ${addedCalls.length} added in one command`);
+    }
+
+    // A multi-line guild message is rate limited by the server unless the
+    // command throttles it (see the duckyfork-bot-ops pitfall).
+    const multiLine = addedCalls.filter((line) => /^(?:.*this\.(?:send|eventSend|warpSend)\s*\(\s*`[^`]*\\n)/.test(line));
+    if (multiLine.length > 0) {
+      sends.notes.push("multi-line send without a throttle");
+      addReason(`multi-line send in ${file}: mirrors several lines to the peer guild at once`);
     }
 
     const errorInterpolation = addedCalls.filter((line) => /\.message\b/.test(line));
