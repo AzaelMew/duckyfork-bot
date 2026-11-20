@@ -42,7 +42,7 @@ async function getKuudraFromUUID(name) {
       name = "a"
     }
     if (name == "f03695547707486ab2308518f04102f7") return
-    const { data } = await axios.get('http://192.168.0.7:3000/v1/profiles/' + name + '?key=77ac89bad625453facaa36457eb3cf5c')
+    const { data } = await axios.get(`${config.minecraft.API.statsProxyUrl}/v1/profiles/${name}?key=${config.minecraft.API.statsProxyKey}`)
     let faction = data.data[0]?.crimson.factions.selected_faction
     let mage = data.data[0]?.crimson.factions.mages_reputation
     let barbarian = data.data[0]?.crimson.factions.barbarians_reputation

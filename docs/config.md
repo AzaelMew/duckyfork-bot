@@ -29,6 +29,37 @@ mv config.json.new config.json
 
 `--force` replaces keys that are already present (the default is to keep them).
 
+### Keys that are credentials or host addresses: `--secrets-file`
+
+`minecraft.API.waifuItKey`, `minecraft.API.statsProxyUrl` and
+`minecraft.API.statsProxyKey` must not be passed on the command line: argv ends
+up in shell history and in `ps`. Put them in a small JSON file instead (create
+it on the host, mode 600, delete it afterwards):
+
+```json
+{
+  "minecraft.API.waifuItKey": "<waifu.it token>",
+  "minecraft.API.statsProxyUrl": "http://STATS_PROXY_HOST:3000",
+  "minecraft.API.statsProxyKey": "<stats proxy key>"
+}
+```
+
+```bash
+chmod 600 /root/secrets.json
+node scripts/migrate-config.js --in config.json --out config.json.new \
+  --name Sky --peer-url http://PEER_HOST:3001 --peer-guild aria \
+  --secrets-file /root/secrets.json
+rm /root/secrets.json
+node scripts/check-config.js config.json.new
+```
+
+The script reads the file, never prints a value from it (only key paths), and
+replaces a key that still holds the `config.example.json` placeholder
+(`WAIFU_IT_API_KEY`, `http://STATS_PROXY_HOST:3000`, `STATS_PROXY_KEY`). A key
+that already has a real value is left alone unless `--force` is given.
+`--stats-proxy-url` exists for the URL if you prefer a flag; it is not a
+secret, but it does carry the host address.
+
 **Careful:** `src/Configuration.js` rewrites `config.json` on every boot and
 copies missing keys from `config.example.json`. If a key is still missing when
 the bot starts, it gets the example's placeholder (`http://PEER_HOST:3001`,
@@ -68,6 +99,20 @@ or empty.
 Other absolute host paths (`level.json`, `guildData.json`, the HelpCommand
 image in the host's `tempest` directory) are still literals in the code and are
 not configurable yet.
+
+## minecraft.API
+
+| key | meaning |
+|---|---|
+| `minecraft.API.hypixelAPIkey` | Hypixel API key (pre-existing) |
+| `minecraft.API.imgurAPIkey` | Imgur client id used by the image uploader (pre-existing) |
+| `minecraft.API.waifuItKey` | waifu.it API token, sent as the `Authorization` header by `stab`, `bonk` and `fuckyou` in both command families. Both hosts use their own token |
+| `minecraft.API.statsProxyUrl` | Base URL of the LAN stats proxy, `http://host:port` with **no trailing slash**. Every request is built as `${statsProxyUrl}/v1/profiles/<uuid>?key=...` (or `/v2/` for networth and claim) |
+| `minecraft.API.statsProxyKey` | Key the stats proxy expects in the `?key=` query parameter |
+
+All three are required and are reported without their values by
+`scripts/check-config.js`. Add them with `--secrets-file` (see above), never as
+a command-line argument.
 
 ## discord.commands.enabled
 
@@ -152,7 +197,7 @@ relay is ever turned on.
   Sky's output, so it is untouched.
 - `src/minecraft/commands/BlacklistCommand.js` writes a relative `blacklist.txt`
   on `blacklist remove` instead of `config.paths.blacklist` (pre-existing bug).
-- `src/minecraft/commands/BirbCommand.js` (Sky) and
-  `src/minecraft/commands/birdCommand.js` (Aria) are the same `bird` command
-  under two file names. Only `BirbCommand.js` is in this tree; adding the other
-  would register a duplicate.
+- `src/minecraft/commands/birdCommand.js`: the `bird` command used to be called
+  `BirbCommand.js` here and `birdCommand.js` in the Aria tree; the file is
+  renamed to `birdCommand.js` so both trees use the command name plus
+  `Command`.

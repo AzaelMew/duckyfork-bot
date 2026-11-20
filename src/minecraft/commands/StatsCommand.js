@@ -47,7 +47,7 @@ async function getStatsFromUUID(name, profile) {
       profile = "a"
     }
     if (name == "f03695547707486ab2308518f04102f7") return
-    const { data } = await axios.get('http://192.168.0.7:3000/v1/profiles/' + name + '?key=77ac89bad625453facaa36457eb3cf5c')
+    const { data } = await axios.get(`${config.minecraft.API.statsProxyUrl}/v1/profiles/${name}?key=${config.minecraft.API.statsProxyKey}`)
     console.log(data)
     for (i = 0; i < Object.keys(data.data).length; i++) {
       if (data.data[i].name.toLowerCase() == profile.toLowerCase()) {
