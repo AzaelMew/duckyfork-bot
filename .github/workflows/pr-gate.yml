@@ -77,8 +77,10 @@ jobs:
       - name: forbidden patterns
         run: |
           BASE="origin/${{ github.base_ref }}"
-          # Hardcoded credentials, LAN peer IPs, host-specific paths.
-          ! git diff "$BASE...HEAD" -U0 | grep -E '^\+.*(Authorization:[[:space:]]*["'\''`]|192\.168\.0\.[0-9]+|/tempest/)'
+          # Hardcoded credentials, LAN peer IPs, host-specific paths in code.
+          # Restricted to source paths: prose and workflow files describe these
+          # patterns, and a real secret in a document is gitleaks' job.
+          ! git diff "$BASE...HEAD" -U0 -- src API scripts index.js | grep -E '^\+.*(Authorization:[[:space:]]*["'\''`]|192\.168\.0\.[0-9]+|/tempest/)'
           # Config, caches, runtime data and logs must never be committed.
           ! git diff --name-only "$BASE...HEAD" | grep -E '(^|/)config\.json$|auth-cache/|^data/|^logs/'
 
