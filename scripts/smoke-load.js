@@ -20,6 +20,7 @@
 const fs = require("fs");
 const path = require("path");
 const EventEmitter = require("events");
+const Module = require("module");
 
 const ROOT = path.resolve(__dirname, "..");
 const CONFIG_PATH = path.join(ROOT, "config.json");
@@ -30,7 +31,7 @@ const COMMAND_DIRS = [
   { dir: "src/discord/oldcommands", kind: "discord" },
 ];
 
-const activity = { sockets: 0, requests: 0, timers: 0 };
+const activity = { sockets: 0, requests: 0, timers: 0, nativeStubs: 0 };
 
 // ---------------------------------------------------------------------------
 // 1. Neutralise outbound I/O and timers before anything is required.
@@ -128,6 +129,20 @@ tls.connect = function () {
   return fakeSocket();
 };
 
+// `canvas` is a native module and CI installs with --ignore-scripts, so its
+// binding does not exist there. A handful of command files require it (via
+// contracts/messageToImage.js, contracts/renderItem.js and directly); loading
+// them only needs the module to resolve, not to draw.
+const canvasStub = require("./stubs/canvas.js");
+const originalLoad = Module._load;
+Module._load = function (request, parent, isMain) {
+  if (request === "canvas") {
+    activity.nativeStubs++;
+    return canvasStub;
+  }
+  return originalLoad.apply(this, arguments);
+};
+
 // Globals the command modules and the shared base classes expect to exist at
 // runtime (they are declared in .eslintrc as globals and set by the managers).
 global.bot = { chat() {}, _client: { chat() {} }, player: null, entity: null, username: "smoke-test" };
@@ -222,9 +237,10 @@ function describeActivity(used) {
 
 function main() {
   if (!fs.existsSync(CONFIG_PATH)) {
-    console.error(`FAIL  ${CONFIG_PATH} is missing.`);
-    console.error("      the gate runs: cp config.example.json config.json");
-    process.exit(1);
+    // The gate copies the example itself, but the script must also work on its
+    // own (and must never overwrite a real config.json).
+    fs.copyFileSync(path.join(ROOT, "config.example.json"), CONFIG_PATH);
+    console.log(`smoke-load: config.json was missing, copied config.example.json`);
   }
 
   const failures = [];
