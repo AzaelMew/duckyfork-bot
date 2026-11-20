@@ -100,6 +100,7 @@ function lint(treeRoot, files, configPath) {
     counts.set(entry.filePath, {
       errors: entry.errorCount,
       warnings: entry.warningCount,
+      fatal: entry.messages.some((message) => message.fatal === true),
       rules: errors.reduce((acc, message) => {
         const rule = message.ruleId || "(fatal)";
         acc[rule] = (acc[rule] || 0) + 1;
@@ -168,14 +169,18 @@ function main() {
     const regressions = [];
     const rows = [];
     for (const file of files) {
-      const before = base.get(file) || { errors: 0, warnings: 0, rules: {} };
+      const before = base.get(file) || { errors: 0, warnings: 0, fatal: false, rules: {} };
       const after = head.get(file);
       if (!after) {
         regressions.push(`${file}: was not linted at head (eslint skipped or ignored it)`);
         continue;
       }
       rows.push({ file, before: before.errors, after: after.errors, rules: after.rules });
-      if (after.errors > before.errors) {
+      if (after.fatal && !before.fatal) {
+        // A file that no longer parses often reports fewer errors than before
+        // (eslint stops at the first one), so count it as a regression.
+        regressions.push(`${file}: parse error at head (fatal), file parsed at base`);
+      } else if (after.errors > before.errors) {
         const delta = after.errors - before.errors;
         const rules = Object.entries(after.rules)
           .map(([rule, count]) => `${rule} x${count}`)
