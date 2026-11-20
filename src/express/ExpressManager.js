@@ -398,20 +398,32 @@ class ExpressManager {
     try {
       if (this.app.minecraft.bot?.player) {
         this.app.minecraft.bot.chat(`/gc ${request.body.author}: ${request.body.message}`)
-        //    async onBroadcast({ fullMessage, chat, chatType, username, rank, guildRank, message, color = 1752220 }) {
-        if(request.body.message.startsWith("!")){
+        // Sky runs `!` commands that arrive from the peer bot; Aria does not
+        // (config.bridge.relayBangCommands false).
+        if (config.bridge.relayBangCommands && request.body.message.startsWith("!")) {
           this.inGameCommand.handle(request.body.author, request.body.message)
         }
-        this.app.minecraft.broadcastMessage({
-          fullMessage: `${request.body.author}: ${request.body.message}`,
-          chat: "Guild",
-          chatType: "guild",
-          username: request.body.author,
-          rank: "VIP+",
-          guildRank: "Elder",
-          message: request.body.message,
-          color: 0x2A2A2A,
-        })
+        if (config.features.peerDiscordRelay === false) {
+          // Aria's tree passed only these fields, so its DiscordManager
+          // onBroadcast returned early and peer messages never reached its
+          // Discord. Kept as-is so the flag can reproduce either bot.
+          this.app.minecraft.broadcastMessage({
+            username: request.body.author,
+            message: request.body.message,
+            guildRank: config.bridge.peerRank.guildRank,
+          })
+        } else {
+          this.app.minecraft.broadcastMessage({
+            fullMessage: `${request.body.author}: ${request.body.message}`,
+            chat: "Guild",
+            chatType: "guild",
+            username: request.body.author,
+            rank: config.bridge.peerRank.rank,
+            guildRank: config.bridge.peerRank.guildRank,
+            message: request.body.message,
+            color: 0x2A2A2A,
+          })
+        }
         return response.status(200).json({
           success: true
         })

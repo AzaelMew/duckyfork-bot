@@ -44,6 +44,7 @@ const USAGE = `Usage:
     [--mirror-on-send true|false] [--relay-bang true|false] \\
     [--blacklist-path <path>] [--commands-enabled "*"|name,name] \\
     [--image-compression true|false] [--retry-on-rate-limit true|false] \\
+    [--peer-discord-relay true|false] \\
     [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] [--force]
 
 Prints key paths only, never values. See docs/config.md.`;
@@ -60,6 +61,7 @@ const FLAGS = {
   "--commands-enabled": "commandsEnabled",
   "--image-compression": "imageCompression",
   "--retry-on-rate-limit": "retryOnRateLimit",
+  "--peer-discord-relay": "peerDiscordRelay",
   "--peer-rank-rank": "peerRankRank",
   "--peer-rank-guild-rank": "peerRankGuildRank",
 };
@@ -103,7 +105,7 @@ function parseArgs(argv) {
       fail(`${argument} needs a value`);
     }
 
-    if (["mirrorOnSend", "relayBangCommands", "imageCompression", "retryOnRateLimit"].includes(key)) {
+    if (["mirrorOnSend", "relayBangCommands", "imageCompression", "retryOnRateLimit", "peerDiscordRelay"].includes(key)) {
       options[key] = parseBoolean(value, argument);
     } else {
       options[key] = value;
@@ -202,6 +204,11 @@ function buildManagedKeys(options, example) {
       "features.imageCompression",
       supplied(options.imageCompression, example.features.imageCompression),
       origin(options.imageCompression),
+    ],
+    [
+      "features.peerDiscordRelay",
+      supplied(options.peerDiscordRelay, example.features.peerDiscordRelay),
+      origin(options.peerDiscordRelay),
     ],
     ["paths.blacklist", supplied(options.blacklistPath, example.paths.blacklist), origin(options.blacklistPath)],
     [

@@ -7,13 +7,15 @@ const uploader = require('../../contracts/Imgur/imgurExport');
 
 const fs = require('fs');
 const path = require('path');
-const sharp = require("sharp")
 const axios = require('axios');
 const { url } = require("inspector");
 async function compressImage(imagePath, maxSizeMB = 10, qualityReductionStep = 5) {
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
   try {
+    // Lazy on purpose: sharp is native, and a host that runs with
+    // features.imageCompression false (Aria) must boot without it.
+    const sharp = require("sharp");
     const stats = await fs.promises.stat(imagePath);
     if (stats.size <= maxSizeBytes) {
       console.log('Image already smaller than max size.  No compression needed.');
@@ -74,9 +76,9 @@ async function downloadUploadDeleteImage(imageUrl) {
     });
 
     // *** COMPRESSION STEP INSERTED HERE ***
-    // Compression
+    // Compression (Sky only; Aria uploads the original)
     let fileToDelete = filePath; // Default to original if compression fails/skipped
-    const compressedFilePath = await compressImage(filePath);
+    const compressedFilePath = config.features.imageCompression ? await compressImage(filePath) : null;
     if (compressedFilePath) {
       fileToDelete = compressedFilePath; // Compression succeeded, delete compressed file
     }

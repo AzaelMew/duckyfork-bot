@@ -10,6 +10,7 @@ const Logger = require(".././Logger.js");
 const path = require("node:path");
 const fs = require("fs");
 const bridge = require("../contracts/bridge.js");
+const commandFilter = require("../contracts/commandFilter.js");
 const { description } = require("./commands/updateCommand.js");
 
 async function apicall(username, message, type, guildRank) {
@@ -54,6 +55,9 @@ class DiscordManager extends CommunicationBridge {
     for (const file of commandFiles) {
       const command = require(`./commands/${file}`);
       if (command.verificationCommand === true && config.verification.enabled === false) {
+        continue;
+      }
+      if (commandFilter.isEnabled("slash", command.name) === false) {
         continue;
       }
 

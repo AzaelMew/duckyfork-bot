@@ -135,6 +135,7 @@ const REQUIRED_KEYS = [
   ["paths.blacklist", "string", "path of blacklist.txt (absolute, or relative to the bot working directory)"],
   ["features.retryOnRateLimit", "boolean", "retry a guild line when Hypixel rate-limits it"],
   ["features.imageCompression", "boolean", "compress Discord images with sharp before upload"],
+  ["features.peerDiscordRelay", "boolean", "post peer-bot messages into this bot's Discord channels"],
 ];
 
 const PLACEHOLDERS = {
