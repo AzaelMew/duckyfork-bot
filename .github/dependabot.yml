@@ -1,11 +1,28 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
+# Weekly, grouped dependency updates.
+# Majors for the five packages that decide how the bots talk to Discord,
+# Minecraft and Hypixel are ignored: those need a manual migration, a canary
+# deploy and a look at every caller (see CONTRIBUTING.md).
 updates:
-  - package-ecosystem: "npm" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        applies-to: version-updates
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "express"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "discord.js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@discordjs/rest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "skyhelper-networth"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "mineflayer"
+        update-types: ["version-update:semver-major"]

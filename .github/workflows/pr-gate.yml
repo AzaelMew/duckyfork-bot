@@ -1,0 +1,117 @@
+name: pr-gate
+
+# Deterministic gate for pull requests. Runs only on `pull_request` (never
+# `pull_request_target`), so PR code executes on a throwaway runner with a
+# read-only token and no repository secrets.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: setup node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 18
+          cache: npm
+
+      # Install scripts must stay enabled: the `canvas` package fetches its
+      # native binding from its install script, and both the smoke-load step
+      # and the ChatHandler jest suite require it.
+      - name: install
+        run: npm ci --no-audit --no-fund
+
+      - name: config schema
+        run: cp config.example.json config.json && node scripts/check-config.js config.json
+
+      - name: syntax
+        run: git ls-files 'src/**/*.js' 'API/**/*.js' index.js | xargs -n1 node --check
+
+      - name: smoke-load every command module
+        run: node scripts/smoke-load.js
+
+      - name: lint ratchet (changed files only)
+        run: node scripts/lint-ratchet.js origin/${{ github.base_ref }}
+
+      - name: jest
+        run: npx jest --forceExit --runInBand
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      # gitleaks runs from a pinned release binary instead of
+      # gitleaks/gitleaks-action: no third-party action code executes in this
+      # job and no GITLEAKS_LICENSE is needed. Only the commits this PR adds are
+      # scanned, so pre-existing history cannot make the gate permanently red.
+      # The checksum is the one published in gitleaks_8.30.1_checksums.txt.
+      - name: gitleaks
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks detect --no-banner --redact --log-opts="origin/${{ github.base_ref }}..HEAD" -v
+
+      - name: forbidden patterns
+        run: |
+          BASE="origin/${{ github.base_ref }}"
+          # Hardcoded credentials, LAN peer IPs, host-specific paths.
+          ! git diff "$BASE...HEAD" -U0 | grep -E '^\+.*(Authorization:[[:space:]]*["'\''`]|192\.168\.0\.[0-9]+|/tempest/)'
+          # Config, caches, runtime data and logs must never be committed.
+          ! git diff --name-only "$BASE...HEAD" | grep -E '(^|/)config\.json$|auth-cache/|^data/|^logs/'
+
+  risk:
+    name: risk
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: setup node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 18
+
+      # Records the classification and never fails on "high": a human decides.
+      - name: classify
+        run: node scripts/pr-risk.js "origin/${{ github.base_ref }}" | tee risk.json
+
+      - name: summary
+        run: |
+          {
+            echo '```json'
+            cat risk.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: upload risk artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: risk
+          path: risk.json
+          if-no-files-found: error
