@@ -1,4 +1,5 @@
 const config = require("../../../config.json");
+const bridge = require("../../contracts/bridge.js");
 const Logger = require("../../Logger.js");
 
 class StateHandler {
@@ -29,7 +30,7 @@ class StateHandler {
     channel.send({
       embeds: [
         {
-          author: { name: `Sky Bridge is Online` },
+          author: { name: `${bridge.name} Bridge is Online` },
           color: 2067276,
         },
       ],
@@ -45,7 +46,7 @@ class StateHandler {
     await channel.send({
       embeds: [
         {
-          author: { name: `Sky Bridge is Offline` },
+          author: { name: `${bridge.name} Bridge is Offline` },
           color: 15548997,
         },
       ],

@@ -1,16 +1,5 @@
-const axios = require("axios");
+const bridge = require("./bridge.js");
 
-async function apicall(message) {
-  try {
-    const response = await axios.post('http://192.168.0.6:3001/api/command', { message: message }, { headers: { Authorization: require("../../config.json").web.token } })
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused: Aria is offline');
-    } else {
-      console.error('An error occurred:', error.message);
-    }
-  }
-}
 class DiscordCommand {
   constructor(discord) {
     this.discord = discord;
@@ -29,7 +18,7 @@ class DiscordCommand {
       this.discord.app.minecraft.bot.chat(message);
       if(message.includes("/g invite")) return
 
-      apicall(message)
+      bridge.postToPeer("/api/command", { message: message });
     }
   }
   sendPromoteMessage(message) {

@@ -8,22 +8,11 @@ const config = require("../../config.json");
 const mineflayer = require("mineflayer");
 const Logger = require("../Logger.js");
 const Filter = require("bad-words");
-const axios = require("axios");
+const bridge = require("../contracts/bridge.js");
 const { Console } = require("winston/lib/winston/transports/index.js");
 const filter = new Filter();
 const fileredWords = config.discord.other.filterWords ?? "";
 filter.addWords(...fileredWords);
-async function apicall(message) {
-  try {
-    const response = await axios.post('http://192.168.0.6:3001/api/command', { message: message }, { headers: { Authorization: require("../../config.json").web.token } })
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused: Aria is offline');
-    } else {
-      console.error('An error occurred:', error.message);
-    }
-  }
-}
 class MinecraftManager extends CommunicationBridge {
   constructor(app) {
     super();
@@ -96,7 +85,7 @@ class MinecraftManager extends CommunicationBridge {
       }
     };
 
-    await apicall(`${chat} ${message} ${generateID(10)}`)
+    await bridge.postToPeer("/api/command", { message: `${chat} ${message} ${generateID(10)}` })
 
     bot.on("message", messageListener);
     this.bot.chat(`${chat} ${message} ${generateID(10)}`);

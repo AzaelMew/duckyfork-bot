@@ -93,6 +93,12 @@ function checkNode(schema, actual, keyPath, hasKey) {
 
   const expected = describe(schema);
   const found = describe(actual);
+  // discord.commands.enabled is either "*" (a string) or a list of names; the
+  // example can only show one of the two shapes, so both are accepted here and
+  // checkRequiredKeys() validates the contents.
+  if (keyPath === "discord.commands.enabled" && (typeof actual === "string" || Array.isArray(actual))) {
+    return;
+  }
   if (expected !== found) {
     problems.push(`${keyPath}: expected ${expected}, got ${found}`);
   }
@@ -110,6 +116,133 @@ function collectExtraKeys(schema, actual, keyPath) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Required keys for the unified (Sky + Aria) codebase. The generic schema walk
+// above already reports them when they are absent from config.example.json, but
+// these carry the hint a deployment needs (what to put there and where it comes
+// from). Only key paths - never values - are printed.
+// ---------------------------------------------------------------------------
+
+const REQUIRED_KEYS = [
+  ["bridge.name", "string", "this bot's own name, e.g. the guild-bridge name shown to players"],
+  ["bridge.peerUrl", "string", "http://host:port of the other bot, no trailing path"],
+  ["bridge.peerGuild", "string", "guild name sent in the /api/message body"],
+  ["bridge.mirrorOnSend", "boolean", "whether MinecraftManager.send mirrors to the peer"],
+  ["bridge.relayBangCommands", "boolean", "whether ! commands from the peer are executed"],
+  ["bridge.peerRank.rank", "string", "rank shown for peer-bot messages"],
+  ["bridge.peerRank.guildRank", "string", "guild rank shown for peer-bot messages"],
+  ["web.token", "string", "shared secret for the bridge HTTP endpoints"],
+  ["paths.blacklist", "string", "path of blacklist.txt (absolute, or relative to the bot working directory)"],
+  ["features.retryOnRateLimit", "boolean", "retry a guild line when Hypixel rate-limits it"],
+  ["features.imageCompression", "boolean", "compress Discord images with sharp before upload"],
+];
+
+const PLACEHOLDERS = {
+  "bridge.name": ["BOT_NAME"],
+  "bridge.peerUrl": ["PEER_HOST"],
+  "bridge.peerGuild": ["peer"],
+  "bridge.peerRank.rank": ["PEER_RANK"],
+  "bridge.peerRank.guildRank": ["PEER_GUILD_RANK"],
+};
+
+function readPath(object, keyPath) {
+  let current = object;
+  for (const part of keyPath.split(".")) {
+    if (current === null || typeof current !== "object" || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return { found: false, value: undefined };
+    }
+    current = current[part];
+  }
+  return { found: true, value: current };
+}
+
+function checkRequiredKeys(config) {
+  for (const [keyPath, type, hint] of REQUIRED_KEYS) {
+    const { found, value } = readPath(config, keyPath);
+
+    if (!found || value === null || value === undefined) {
+      problems.push(`${keyPath}: missing - ${hint} (run scripts/migrate-config.js to add it)`);
+      continue;
+    }
+
+    if (typeof value !== type) {
+      problems.push(`${keyPath}: expected ${type}, got ${describe(value)} - ${hint}`);
+      continue;
+    }
+
+    if (type === "string" && value.trim().length === 0) {
+      problems.push(`${keyPath}: is empty - ${hint}`);
+      continue;
+    }
+
+    for (const placeholder of PLACEHOLDERS[keyPath] || []) {
+      if (value.includes(placeholder)) {
+        warnings.push(`${keyPath}: still the config.example.json placeholder - set the real value with scripts/migrate-config.js`);
+      }
+    }
+  }
+
+  const enabled = readPath(config, "discord.commands.enabled");
+  if (!enabled.found) {
+    problems.push('discord.commands.enabled: missing - "*" for every command, or the list of command names to load');
+  } else if (enabled.value !== "*") {
+    if (!Array.isArray(enabled.value)) {
+      problems.push('discord.commands.enabled: expected "*" or an array of command names, got ' + describe(enabled.value));
+    } else if (enabled.value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+      problems.push("discord.commands.enabled: every entry must be a non-empty string");
+    }
+  }
+
+  const peerUrl = readPath(config, "bridge.peerUrl");
+  if (peerUrl.found && typeof peerUrl.value === "string" && peerUrl.value.trim().length > 0) {
+    let parsed;
+    try {
+      parsed = new URL(peerUrl.value);
+    } catch (error) {
+      problems.push("bridge.peerUrl: not an absolute URL (expected http://host:port)");
+      return;
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      problems.push("bridge.peerUrl: must use http:// or https://");
+    }
+  }
+}
+
+// The generic schema walk and the required-key pass can report the same path.
+// Keep the later (more specific) message at the position of the first one.
+function dedupeProblems() {
+  const indexByKey = new Map();
+  const unique = [];
+
+  for (const problem of problems) {
+    const key = problem.split(": ")[0];
+    if (indexByKey.has(key)) {
+      unique[indexByKey.get(key)] = problem;
+    } else {
+      indexByKey.set(key, unique.length);
+      unique.push(problem);
+    }
+  }
+
+  problems.length = 0;
+  problems.push(...unique);
+}
+
+function checkConfigFile(target) {
+  problems.length = 0;
+  warnings.length = 0;
+
+  const schema = readJson(SCHEMA_PATH, "schema");
+  const config = readJson(target, "config");
+
+  checkNode(schema, config, "", true);
+  collectExtraKeys(schema, config, "");
+  checkRequiredKeys(config);
+  dedupeProblems();
+
+  return { target, problems: problems.slice(), warnings: warnings.slice() };
+}
+
 function main() {
   const target = path.resolve(process.argv[2] || path.join(REPO_ROOT, "config.json"));
 
@@ -119,23 +252,23 @@ function main() {
     process.exit(1);
   }
 
-  const schema = readJson(SCHEMA_PATH, "schema");
-  const config = readJson(target, "config");
+  const result = checkConfigFile(target);
 
-  checkNode(schema, config, "", true);
-  collectExtraKeys(schema, config, "");
-
-  if (warnings.length > 0) {
-    for (const warning of warnings) console.warn(`warn  ${warning}`);
+  if (result.warnings.length > 0) {
+    for (const warning of result.warnings) console.warn(`warn  ${warning}`);
   }
 
-  if (problems.length > 0) {
-    console.error(`\nFAIL  ${problems.length} problem(s) in ${displayPath(target)}:`);
-    for (const problem of problems) console.error(`  - ${problem}`);
+  if (result.problems.length > 0) {
+    console.error(`\nFAIL  ${result.problems.length} problem(s) in ${displayPath(target)}:`);
+    for (const problem of result.problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
 
-  console.log(`OK    ${displayPath(target)} matches config.example.json (${warnings.length} warning(s))`);
+  console.log(`OK    ${displayPath(target)} matches config.example.json (${result.warnings.length} warning(s))`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { checkConfigFile };

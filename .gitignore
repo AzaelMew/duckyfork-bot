@@ -5,3 +5,7 @@ auth-cache/
 logs/
 data/
 lastcalled.txt
+lastCalledTime.txt
+lastDogCalledTime.txt
+blacklist.txt
+downloaded_image*.png

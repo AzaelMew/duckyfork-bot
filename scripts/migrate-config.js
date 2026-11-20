@@ -1,0 +1,300 @@
+#!/usr/bin/env node
+/**
+ * migrate-config.js - add the unified (Sky + Aria) config keys to a host
+ * config.json without touching anything that is already there.
+ *
+ * The bot's real config.json on a host contains Discord tokens, the Hypixel API
+ * key and the bridge token. This script exists so nobody has to open that file
+ * by hand: it copies it, adds the keys the unified codebase needs
+ * (bridge.*, features.*, paths.blacklist, discord.commands.enabled) and leaves
+ * every existing value exactly as it was.
+ *
+ * Usage:
+ *   node scripts/migrate-config.js --in config.json --out config.json.new \
+ *     --name Sky --peer-url http://PEER_HOST:3001 --peer-guild aria \
+ *     [--mirror-on-send true|false] [--relay-bang true|false] \
+ *     [--blacklist-path /path/to/blacklist.txt] \
+ *     [--commands-enabled "*"|autoclaim,autokick,...] \
+ *     [--image-compression true|false] [--retry-on-rate-limit true|false] \
+ *     [--peer-rank-rank VIP+] [--peer-rank-guild-rank Elder] [--force]
+ *
+ * Behaviour:
+ *   - --in is never written to; --out must be a different file.
+ *   - A key that already exists keeps its value ("kept") unless --force is
+ *     given ("set"). Missing keys are added from the arguments or, when the
+ *     argument is omitted, from config.example.json.
+ *   - Only key paths are printed. Values - supplied or existing - never are.
+ *   - The result is validated with scripts/check-config.js before it is
+ *     reported as usable.
+ *
+ * Exit codes: 0 = writable config produced, 1 = refused or invalid.
+ */
+"use strict";
+
+const fs = require("fs");
+const path = require("path");
+const { checkConfigFile } = require("./check-config.js");
+
+const ROOT = path.resolve(__dirname, "..");
+const EXAMPLE_PATH = path.join(ROOT, "config.example.json");
+
+const USAGE = `Usage:
+  node scripts/migrate-config.js --in <config.json> --out <config.json.new> \\
+    --name <Sky|Aria> --peer-url <http://host:port> --peer-guild <name> \\
+    [--mirror-on-send true|false] [--relay-bang true|false] \\
+    [--blacklist-path <path>] [--commands-enabled "*"|name,name] \\
+    [--image-compression true|false] [--retry-on-rate-limit true|false] \\
+    [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] [--force]
+
+Prints key paths only, never values. See docs/config.md.`;
+
+const FLAGS = {
+  "--in": "input",
+  "--out": "output",
+  "--name": "name",
+  "--peer-url": "peerUrl",
+  "--peer-guild": "peerGuild",
+  "--mirror-on-send": "mirrorOnSend",
+  "--relay-bang": "relayBangCommands",
+  "--blacklist-path": "blacklistPath",
+  "--commands-enabled": "commandsEnabled",
+  "--image-compression": "imageCompression",
+  "--retry-on-rate-limit": "retryOnRateLimit",
+  "--peer-rank-rank": "peerRankRank",
+  "--peer-rank-guild-rank": "peerRankGuildRank",
+};
+
+const FLAG_NAMES = Object.fromEntries(Object.entries(FLAGS).map(([flag, key]) => [key, flag]));
+
+function fail(message) {
+  console.error(`FAIL  ${message}`);
+  process.exit(1);
+}
+
+function parseBoolean(raw, flag) {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  fail(`${flag} takes true or false`);
+  return undefined;
+}
+
+function parseArgs(argv) {
+  const options = { force: false, help: false };
+
+  for (let i = 0; i < argv.length; i++) {
+    const argument = argv[i];
+
+    if (argument === "--help" || argument === "-h") {
+      options.help = true;
+      continue;
+    }
+    if (argument === "--force") {
+      options.force = true;
+      continue;
+    }
+
+    const key = FLAGS[argument];
+    if (key === undefined) {
+      fail(`unknown argument ${argument}\n\n${USAGE}`);
+    }
+
+    const value = argv[++i];
+    if (value === undefined || value.startsWith("--")) {
+      fail(`${argument} needs a value`);
+    }
+
+    if (["mirrorOnSend", "relayBangCommands", "imageCompression", "retryOnRateLimit"].includes(key)) {
+      options[key] = parseBoolean(value, argument);
+    } else {
+      options[key] = value;
+    }
+  }
+
+  return options;
+}
+
+function readJsonFile(file, label) {
+  let raw;
+  try {
+    raw = fs.readFileSync(file, "utf8");
+  } catch (error) {
+    fail(`${label}: cannot read ${file} (${error.code || error.message})`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    fail(`${label}: ${file} is not valid JSON (${error.message})`);
+  }
+  return undefined;
+}
+
+function getPath(object, keyPath) {
+  let current = object;
+  for (const part of keyPath.split(".")) {
+    if (current === null || typeof current !== "object" || !Object.prototype.hasOwnProperty.call(current, part)) {
+      return { found: false, value: undefined };
+    }
+    current = current[part];
+  }
+  return { found: true, value: current };
+}
+
+function setPath(object, keyPath, value) {
+  const parts = keyPath.split(".");
+  let current = object;
+
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (current[part] === undefined || current[part] === null) {
+      current[part] = {};
+    } else if (typeof current[part] !== "object" || Array.isArray(current[part])) {
+      fail(`cannot add ${keyPath}: ${parts.slice(0, i + 1).join(".")} is not an object`);
+    }
+    current = current[part];
+  }
+
+  current[parts[parts.length - 1]] = value;
+}
+
+function sameValue(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function commandsValue(raw) {
+  const value = raw.trim();
+  if (value === "*") return "*";
+  const names = value
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  if (names.length === 0) {
+    fail("--commands-enabled needs \"*\" or a comma-separated list of command names");
+  }
+  return names;
+}
+
+function buildManagedKeys(options, example) {
+  const supplied = (value, fallback) => (value === undefined ? fallback : value);
+  const origin = (value) => (value === undefined ? "default" : "supplied");
+
+  const entries = [
+    ["bridge.name", options.name, "supplied"],
+    ["bridge.peerUrl", options.peerUrl, "supplied"],
+    ["bridge.peerGuild", options.peerGuild, "supplied"],
+    ["bridge.mirrorOnSend", supplied(options.mirrorOnSend, example.bridge.mirrorOnSend), origin(options.mirrorOnSend)],
+    [
+      "bridge.relayBangCommands",
+      supplied(options.relayBangCommands, example.bridge.relayBangCommands),
+      origin(options.relayBangCommands),
+    ],
+    ["bridge.peerRank.rank", supplied(options.peerRankRank, example.bridge.peerRank.rank), origin(options.peerRankRank)],
+    [
+      "bridge.peerRank.guildRank",
+      supplied(options.peerRankGuildRank, example.bridge.peerRank.guildRank),
+      origin(options.peerRankGuildRank),
+    ],
+    [
+      "features.retryOnRateLimit",
+      supplied(options.retryOnRateLimit, example.features.retryOnRateLimit),
+      origin(options.retryOnRateLimit),
+    ],
+    [
+      "features.imageCompression",
+      supplied(options.imageCompression, example.features.imageCompression),
+      origin(options.imageCompression),
+    ],
+    ["paths.blacklist", supplied(options.blacklistPath, example.paths.blacklist), origin(options.blacklistPath)],
+    [
+      "discord.commands.enabled",
+      options.commandsEnabled === undefined ? example.discord.commands.enabled : commandsValue(options.commandsEnabled),
+      origin(options.commandsEnabled),
+    ],
+  ];
+
+  return entries;
+}
+
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+
+  if (options.help) {
+    console.log(USAGE);
+    return;
+  }
+
+  for (const key of ["input", "output", "name", "peerUrl", "peerGuild"]) {
+    if (options[key] === undefined || String(options[key]).trim().length === 0) {
+      fail(`${FLAG_NAMES[key]} is required\n\n${USAGE}`);
+    }
+  }
+
+  const inputPath = path.resolve(options.input);
+  const outputPath = path.resolve(options.output);
+
+  if (!fs.existsSync(inputPath)) {
+    fail(`--in ${options.input} does not exist`);
+  }
+
+  const inputReal = fs.realpathSync(inputPath);
+  const outputReal = fs.existsSync(outputPath) ? fs.realpathSync(outputPath) : path.resolve(outputPath);
+  if (inputReal === outputReal) {
+    fail("--out must be a different file than --in; the input config is never overwritten");
+  }
+
+  const example = readJsonFile(EXAMPLE_PATH, "schema");
+  const config = readJsonFile(inputPath, "config");
+
+  const report = { added: [], kept: [], replaced: [], defaults: [], differs: [] };
+
+  for (const [keyPath, value, origin] of buildManagedKeys(options, example)) {
+    const existing = getPath(config, keyPath);
+
+    if (existing.found && !options.force) {
+      report.kept.push(keyPath);
+      if (!sameValue(existing.value, value)) {
+        report.differs.push(keyPath);
+      }
+      continue;
+    }
+
+    if (existing.found) {
+      report.replaced.push(keyPath);
+    } else {
+      report.added.push(keyPath);
+    }
+    if (origin === "default") {
+      report.defaults.push(keyPath);
+    }
+    setPath(config, keyPath, value);
+  }
+
+  fs.writeFileSync(outputPath, JSON.stringify(config, null, 2));
+
+  for (const entry of report.kept) console.log(`kept  ${entry}`);
+  for (const entry of report.replaced) console.log(`set   ${entry}`);
+  for (const entry of report.added) console.log(`added ${entry}`);
+  for (const entry of report.differs) {
+    console.log(`note  ${entry}: already set and left alone (--force would replace it with the supplied value)`);
+  }
+  for (const entry of report.defaults) {
+    console.log(`note  ${entry}: not supplied on the command line, took the config.example.json value`);
+  }
+
+  const result = checkConfigFile(outputPath);
+
+  for (const warning of result.warnings) console.warn(`warn  ${warning}`);
+
+  if (result.problems.length > 0) {
+    console.error(`\nFAIL  ${result.problems.length} problem(s) in the written file:`);
+    for (const problem of result.problems) console.error(`  - ${problem}`);
+    fail("the written config is not usable; do not deploy it");
+  }
+
+  console.log("");
+  console.log(
+    `OK    wrote ${options.output} (${report.added.length} added, ${report.replaced.length} replaced, ${report.kept.length} kept)`,
+  );
+  console.log("      review it, then move it over config.json on the host and restart the bot");
+}
+
+main();

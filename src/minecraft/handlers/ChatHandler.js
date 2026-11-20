@@ -9,6 +9,7 @@ const eventHandler = require("../../contracts/EventHandler.js");
 const getWeight = require("../../../API/stats/weight.js");
 const { isUuid } = require("../../../API/utils/uuid.js");
 const messages = require("../../../messages.json");
+const bridge = require("../../contracts/bridge.js");
 const { EmbedBuilder } = require("discord.js");
 const config = require("../../../config.json");
 const Logger = require("../../Logger.js");
@@ -234,17 +235,6 @@ function makeid(length) {
   }
   return result;
 }
-async function apicall(message) {
-  try {
-    const response = await axios.post('http://192.168.0.6:3001/api/command', { message: message }, { headers: { Authorization: require("../../../config.json").web.token } })
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused: Aria is offline');
-    } else {
-      console.error('An error occurred:', error.reason);
-    }
-  }
-}
 class StateHandler extends eventHandler {
   constructor(minecraft, command, discord) {
     super();
@@ -317,7 +307,7 @@ class StateHandler extends eventHandler {
       if (config.minecraft.guildRequirements.enabled) {
         const output = await Promise.all([getLatestProfile(uuid)]);
         let newlvl = 0
-        let blacklist = fs.readFileSync('/tempest/blacklist.txt', "utf-8")
+        let blacklist = fs.readFileSync(config.paths.blacklist, "utf-8")
         if (!blacklist.includes(uuid)) {
           for (let b = 0; b < Object.keys(output[0].profiles).length; b++) {
             let profile = output[0].profiles[b]
@@ -375,7 +365,7 @@ class StateHandler extends eventHandler {
     if (this.isLoginMessage(message)) {
       if (config.discord.other.joinMessage === true) {
         const username = message.split(">")[1].trim().split("joined.")[0].trim();
-        apicall(`/gc ${username} joined. {${makeid(12)}}`)
+        bridge.postToPeer("/api/command", { message: `/gc ${username} joined. {${makeid(12)}}` })
         return this.minecraft.broadcastPlayerToggle({
           fullMessage: colouredMessage,
           username: username,
@@ -389,7 +379,7 @@ class StateHandler extends eventHandler {
     if (this.isLogoutMessage(message)) {
       if (config.discord.other.joinMessage === true) {
         const username = message.split(">")[1].trim().split("left.")[0].trim();
-        apicall(`/gc ${username} left. {${makeid(12)}}`)
+        bridge.postToPeer("/api/command", { message: `/gc ${username} left. {${makeid(12)}}` })
         return this.minecraft.broadcastPlayerToggle({
           fullMessage: colouredMessage,
           username: username,
@@ -412,7 +402,7 @@ class StateHandler extends eventHandler {
         })}`,
       );
       await this.updateUser(username);
-      apicall(`/gc ${username} has joined Sky. {${makeid(12)}}`)
+      bridge.postToPeer("/api/command", { message: `/gc ${username} has joined ${bridge.name}. {${makeid(12)}}` })
       return [
         this.minecraft.broadcastHeadedEmbed({
           message: replaceVariables(messages.joinMessage, { username }),
@@ -430,7 +420,7 @@ class StateHandler extends eventHandler {
         .trim()
         .split(/ +/g)[0];
       await this.updateUser(username);
-      apicall(`/gc ${username} left the guild. {${makeid(12)}}`)
+      bridge.postToPeer("/api/command", { message: `/gc ${username} left the guild. {${makeid(12)}}` })
 
       return [
 
@@ -451,7 +441,7 @@ class StateHandler extends eventHandler {
         .trim()
         .split(/ +/g)[0];
       await this.updateUser(username);
-      apicall(`/gc ${username} was kicked from the guild. {${makeid(12)}}`)
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was kicked from the guild. {${makeid(12)}}` })
 
       return [
 
@@ -477,7 +467,7 @@ class StateHandler extends eventHandler {
         .pop()
         .trim();
       await this.updateUser(username);
-      apicall(`/gc ${username} was promoted to ${rank} {${makeid(12)}}`)
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was promoted to ${rank} {${makeid(12)}}` })
 
       return [
         this.minecraft.broadcastCleanEmbed({
@@ -504,7 +494,7 @@ class StateHandler extends eventHandler {
         .pop()
         .trim();
       await this.updateUser(username);
-      apicall(`/gc ${username} was demoted to ${rank} {${makeid(12)}}`)
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was demoted to ${rank} {${makeid(12)}}` })
 
       return [
         this.minecraft.broadcastCleanEmbed({
