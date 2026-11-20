@@ -223,11 +223,11 @@ function exportShape(file) {
 
 function exportShapeOrSource(file, source) {
   try {
-    return { names: exportShape(file), source: "require" };
+    return { names: exportShape(file), how: "require" };
   } catch (error) {
     // Loading can legitimately fail (native deps, top-level throws); fall back
     // to the static scan so the check still says something useful.
-    return { names: exportNames(source), source: `static (${error.message.split("\n")[0]})` };
+    return { names: exportNames(source), how: `static (${error.message.split("\n")[0]})` };
   }
 }
 
@@ -262,13 +262,21 @@ function analyzeExports(commit, result, addReason) {
       const baseSource = fs.existsSync(basePath) ? fs.readFileSync(basePath, "utf8") : "";
       const headSource = fs.readFileSync(headPath, "utf8");
 
-      const before = new Set(exportShapeOrSource(basePath, baseSource).names);
-      const after = new Set(exportShapeOrSource(headPath, headSource).names);
-      const addedNames = [...after].filter((name) => !before.has(name)).sort();
-      const removedNames = [...before].filter((name) => !after.has(name)).sort();
+      let before = exportShapeOrSource(basePath, baseSource);
+      let after = exportShapeOrSource(headPath, headSource);
+      // Never compare a required module against a statically parsed one: the
+      // static scan cannot see prototype methods, so the diff would be noise.
+      // If either side failed to load, parse both sides the same way.
+      if (before.how !== "require" || after.how !== "require") {
+        before = { names: exportNames(baseSource), how: "static" };
+        after = { names: exportNames(headSource), how: "static" };
+      }
+
+      const addedNames = [...after.names].filter((name) => !before.names.includes(name)).sort();
+      const removedNames = [...before.names].filter((name) => !after.names.includes(name)).sort();
       if (addedNames.length === 0 && removedNames.length === 0) continue;
 
-      result.exportChanges.push({ file, added: addedNames, removed: removedNames });
+      result.exportChanges.push({ file, added: addedNames, removed: removedNames, how: after.how });
       addReason(`export change in ${file}${removedNames.length ? ` (removed: ${removedNames.join(", ")})` : ""}${addedNames.length ? ` (added: ${addedNames.join(", ")})` : ""}`);
 
       const modulePath = file.replace(/\.js$/, "");
