@@ -1,8 +1,7 @@
+# Weekly, grouped patch/minor updates. Majors of the packages that can break a
+# live bot (or need a newer Node than the hosts run) are ignored on purpose;
+# they are upgraded by hand through a PR that goes past the gate.
 version: 2
-# Weekly, grouped dependency updates.
-# Majors for the five packages that decide how the bots talk to Discord,
-# Minecraft and Hypixel are ignored: those need a manual migration, a canary
-# deploy and a look at every caller (see CONTRIBUTING.md).
 updates:
   - package-ecosystem: "npm"
     directory: "/"

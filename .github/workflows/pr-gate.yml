@@ -31,11 +31,12 @@ jobs:
           node-version: 18
           cache: npm
 
-      # Install scripts must stay enabled: the `canvas` package fetches its
-      # native binding from its install script, and both the smoke-load step
-      # and the ChatHandler jest suite require it.
+      # --ignore-scripts on purpose: the PR controls package.json, so it must not
+      # be able to run install scripts on the runner. The only native dependency
+      # the loaded code needs (canvas) is stubbed by scripts/stubs/canvas.js,
+      # wired in through scripts/smoke-load.js and jest.config.js.
       - name: install
-        run: npm ci --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: config schema
         run: cp config.example.json config.json && node scripts/check-config.js config.json
@@ -62,35 +63,51 @@ jobs:
         with:
           fetch-depth: 0
 
-      # gitleaks runs from a pinned release binary instead of
-      # gitleaks/gitleaks-action: no third-party action code executes in this
-      # job and no GITLEAKS_LICENSE is needed. Only the commits this PR adds are
-      # scanned, so pre-existing history cannot make the gate permanently red.
-      # The checksum is the one published in gitleaks_8.30.1_checksums.txt.
+      # The pinned release binary is used instead of gitleaks/gitleaks-action:
+      # no third-party action code runs in this job, and this account type does
+      # not have to depend on how the action handles licences. Only the commits
+      # this PR adds are scanned, so pre-existing history can never make the
+      # gate permanently red. The sha256 is the published checksum for this
+      # release (gitleaks_8.30.1_checksums.txt).
       - name: gitleaks
         run: |
-          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
-          tar -xzf gitleaks.tar.gz gitleaks
-          ./gitleaks detect --no-banner --redact --log-opts="origin/${{ github.base_ref }}..HEAD" -v
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          ( cd "$RUNNER_TEMP" && echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c - )
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" detect --no-banner --redact --verbose \
+            --log-opts="origin/${{ github.base_ref }}..HEAD"
 
+      # Hardcoded credentials, LAN peer IPs and host-specific paths in added
+      # lines; config/cache/data/log files anywhere in the diff. Only the
+      # offending file names are printed - the matched values never are.
       - name: forbidden patterns
         run: |
+          set -euo pipefail
           BASE="origin/${{ github.base_ref }}"
-          status=0
-          # Hardcoded credentials, LAN peer IPs, host-specific paths in code.
-          # Restricted to source paths: prose and workflow files describe these
-          # patterns, and a real secret in a document is gitleaks' job.
-          if git diff "$BASE...HEAD" -U0 -- src API scripts index.js | grep -E '^\+.*(Authorization:[[:space:]]*["'\''`]|192\.168\.0\.[0-9]+|/tempest/)'; then
-            echo "::error::added a hardcoded credential, LAN IP or host-specific path"
-            status=1
+          DIFF="$RUNNER_TEMP/pr.diff"
+          git diff "$BASE...HEAD" -U0 > "$DIFF"
+
+          read -r -d '' PATTERN <<'PATTERN_EOF' || true
+          Authorization:[[:space:]]*["'][^"']{8,}["']|192[.]168[.]0[.][0-9]+|tempest[/]|imgur[^[:space:]"']*[A-Za-z0-9_-]{20,}
+          PATTERN_EOF
+
+          HITS=$(PATTERN="$PATTERN" awk 'BEGIN { p = ENVIRON["PATTERN"] } /^\+\+\+ b\// { f = substr($0, 7) } /^\+/ && $0 ~ p { print f }' "$DIFF" | sort -u || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::forbidden pattern in added lines (values not printed)"
+            printf '%s\n' "$HITS"
+            exit 1
           fi
-          # Config, caches, runtime data and logs must never be committed.
-          if git diff --name-only "$BASE...HEAD" | grep -E '(^|/)config\.json$|auth-cache/|^data/|^logs/'; then
-            echo "::error::added config.json, auth-cache/, data/ or logs/"
-            status=1
+          echo "no forbidden patterns in added lines"
+
+          git diff --name-only "$BASE...HEAD" > "$RUNNER_TEMP/names.txt"
+          if grep -qE '(^|/)config[.]json$|(^|/)auth-cache/|(^|/)data/|^logs/' "$RUNNER_TEMP/names.txt"; then
+            echo "::error::config.json, auth-cache/, data/ or logs/ must not be committed"
+            grep -E '(^|/)config[.]json$|(^|/)auth-cache/|(^|/)data/|^logs/' "$RUNNER_TEMP/names.txt"
+            exit 1
           fi
-          exit $status
+          echo "no config/cache/data/log files in the diff"
 
   risk:
     name: risk
@@ -107,7 +124,7 @@ jobs:
         with:
           node-version: 18
 
-      # Records the classification and never fails on "high": a human decides.
+      # Records the classification, never fails on "high": a human decides.
       - name: classify
         run: node scripts/pr-risk.js "origin/${{ github.base_ref }}" | tee risk.json
 

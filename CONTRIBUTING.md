@@ -1,61 +1,48 @@
 # Contributing
 
-Pull requests go **only** to `AzaelMew/duckyfork-bot`. That repository runs the
-Sky bot and, after the merge, the Aria bot too; `duckyfork-bot-aria` is being
-retired, so a fix that lands there is a fix that will be lost.
+Pull requests go to **AzaelMew/duckyfork-bot** only. The Aria repo is a snapshot
+of the older tree and does not accept changes.
 
-## Before you open a PR
+## Sending a change
 
-1. Branch off `main`, keep the change small and focused.
-2. Node 18 is what the bots and CI run. Do not use newer syntax or APIs.
-3. **Never** edit `config.json`, tokens, `auth-cache/`, `data/` or `logs/`, and
-   never commit them. Bot credentials live on the hosts only; the repository
-   holds `config.example.json` with placeholders.
-4. **Never** add a dependency, or bump one a major version, without saying why
-   in the PR. Express, discord.js, @discordjs/rest, skyhelper-networth and
-   mineflayer are the risky five: their majors are ignored by Dependabot and
-   need a person.
-5. No force-pushes, no rewriting history, no pushing to `main`.
+1. Fork the repo, branch off `main`, open a pull request against `main`.
+   Do not push to `main` and never force-push.
+2. One change per PR. Keep it small: over ~400 changed lines or 12 files the
+   owner reviews it by hand before anything else happens.
+3. Say which bot the change affects (Sky, Aria or both) and how you tested it.
+   If player- or Discord-visible output changes, quote the before/after text.
+4. The PR must be green in the `pr-gate` workflow (`verify`, `secrets`, `risk`)
+   before it is looked at.
+
+## What never belongs in a PR
+
+- `config.json`, `auth-cache/`, `data/`, `logs/`. They are gitignored and
+  host-specific; the gate refuses a diff that touches them.
+- Tokens, API keys, webhook URLs, Discord IDs of private channels. The
+  `secrets` job scans the added lines and will fail the PR.
+- LAN addresses (`192.168.0.x`) and host paths such as the `tempest` directory.
+  Read them from config instead of hardcoding them.
+- A new dependency, or a major bump of an existing one, without discussing it
+  first. The gate flags both as high risk.
 
 ## Running the gate locally
 
 ```bash
-npm ci
-cp config.example.json config.json     # placeholder values, never commit it
+cp config.example.json config.json     # gitignored, never commit it
+npm ci --ignore-scripts --no-audit --no-fund
 node scripts/check-config.js config.json
-node scripts/smoke-load.js             # loads every command module
-npx jest --forceExit --runInBand
+node scripts/smoke-load.js
 node scripts/lint-ratchet.js origin/main
-node scripts/pr-risk.js origin/main
+npx jest --forceExit --runInBand
 ```
 
-`lint-ratchet` only looks at files your branch changed and only fails when the
-error count for a file went up: the repo has plenty of old ESLint errors, do not
-fix those in an unrelated PR.
+`scripts/lint-ratchet.js` only fails on errors a PR adds: the repo has ~488
+pre-existing ESLint errors, so `npm run lint` is not a gate.
 
-## What CI checks
+## Things that bite in this bot
 
-Every PR runs `.github/workflows/pr-gate.yml`:
-
-- `verify`: config schema, `node --check` syntax, every command module loads,
-  ESLint ratchet, jest.
-- `secrets`: gitleaks on the commits the PR adds, plus a grep for hardcoded
-  `Authorization:` values, LAN IPs, `/tempest/` paths and committed config or
-  logs.
-- `risk`: classifies the PR as `low` or `high` (high-risk files, dependency
-  majors, changed exports, diff size, new outbound hosts, extra chat sends).
-  `high` does not fail the run, it means the owner reviews before merge.
-
-## Writing bot commands
-
-- One `this.send(...)` per command where possible: every send is mirrored into
-  the other guild, so two sends means two lines in both guilds.
-- Multi-line output must be throttled, otherwise the bot floods guild chat.
-- Never interpolate an upstream `error.message` into a chat message: it leaks
-  internals to players.
-- New network endpoints are a risk: say which host and why in the PR.
-
-## Commit messages
-
-Short summary line, then what changed and how it was tested. Mention which bot
-you tested against (Sky, Aria, or neither).
+- Every `this.send()` in a command is mirrored to the peer bot's guild chat, so
+  one command should send one line. Multi-line output needs a throttle.
+- `skyhelper-networth` starts a timer when it is required; anything that loads
+  the bot code has to `process.exit()` at the end or it hangs.
+- Node 18 is what CI and both hosts run. Do not use newer syntax or APIs.

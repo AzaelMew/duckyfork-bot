@@ -1,21 +1,21 @@
-## What changed
+## What does this PR change?
 
-<!-- One or two sentences. What does the bot do differently after this PR? -->
+<!-- One or two sentences. If it changes player- or Discord-visible output, quote the before/after. -->
 
-## Which bot(s) are affected
+## Which bot(s) does it affect?
 
 - [ ] Sky
 - [ ] Aria
 - [ ] Both
+- [ ] Neither (tooling/docs only)
 
-## How it was tested
+## How was it tested?
 
-<!-- Locally? On a test guild? Which commands did you run? -->
+<!-- The command you ran, what you saw, or "not tested, needs a live bot". -->
 
 ## Checklist
 
-- [ ] No `config.json`, tokens, `auth-cache/`, `data/` or `logs/` in the diff
-- [ ] No new dependency or major version bump (or: explained above)
-- [ ] Node 18 compatible
-- [ ] Changes stay inside the files this feature needs
-- [ ] The PR is against `AzaelMew/duckyfork-bot`, not a fork of the old repo
+- [ ] No `config.json`, token, IP or host-path edits in the diff
+- [ ] Gate run locally (see `CONTRIBUTING.md`)
+- [ ] Targets `AzaelMew/duckyfork-bot` only, branched off `main`
+- [ ] New or changed command sends at most one chat line, or throttles it
