@@ -21,7 +21,10 @@
     },
     "API": {
       "hypixelAPIkey": "HYPIXEL_API_KEY",
-      "imgurAPIkey": "IMGUR_API_KEY"
+      "imgurAPIkey": "IMGUR_API_KEY",
+      "waifuItKey": "WAIFU_IT_API_KEY",
+      "statsProxyUrl": "http://STATS_PROXY_HOST:3000",
+      "statsProxyKey": "STATS_PROXY_KEY"
     },
     "guildRequirements": {
       "enabled": false,

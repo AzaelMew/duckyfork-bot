@@ -132,6 +132,13 @@ const REQUIRED_KEYS = [
   ["bridge.peerRank.rank", "string", "rank shown for peer-bot messages"],
   ["bridge.peerRank.guildRank", "string", "guild rank shown for peer-bot messages"],
   ["web.token", "string", "shared secret for the bridge HTTP endpoints"],
+  ["minecraft.API.waifuItKey", "string", "waifu.it API token used by the stab/bonk/fuckyou commands"],
+  [
+    "minecraft.API.statsProxyUrl",
+    "string",
+    "base URL of the LAN stats proxy, e.g. http://STATS_PROXY_HOST:3000, no trailing slash",
+  ],
+  ["minecraft.API.statsProxyKey", "string", "key the stats proxy expects in the ?key= query parameter"],
   ["paths.blacklist", "string", "path of blacklist.txt (absolute, or relative to the bot working directory)"],
   ["features.retryOnRateLimit", "boolean", "retry a guild line when Hypixel rate-limits it"],
   ["features.imageCompression", "boolean", "compress Discord images with sharp before upload"],
@@ -144,6 +151,9 @@ const PLACEHOLDERS = {
   "bridge.peerGuild": ["peer"],
   "bridge.peerRank.rank": ["PEER_RANK"],
   "bridge.peerRank.guildRank": ["PEER_GUILD_RANK"],
+  "minecraft.API.waifuItKey": ["WAIFU_IT_API_KEY"],
+  "minecraft.API.statsProxyUrl": ["STATS_PROXY_HOST"],
+  "minecraft.API.statsProxyKey": ["STATS_PROXY_KEY"],
 };
 
 function readPath(object, keyPath) {
@@ -205,6 +215,26 @@ function checkRequiredKeys(config) {
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       problems.push("bridge.peerUrl: must use http:// or https://");
+    }
+  }
+
+  // The stats proxy calls are built as `${statsProxyUrl}/v1/profiles/...`, so a
+  // trailing slash would produce a double slash in every request path.
+  const statsProxyUrl = readPath(config, "minecraft.API.statsProxyUrl");
+  if (statsProxyUrl.found && typeof statsProxyUrl.value === "string" && statsProxyUrl.value.trim().length > 0) {
+    const value = statsProxyUrl.value.trim();
+    let parsed;
+    try {
+      parsed = new URL(value);
+    } catch (error) {
+      problems.push("minecraft.API.statsProxyUrl: not an absolute URL (expected http://host:port)");
+      return;
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      problems.push("minecraft.API.statsProxyUrl: must use http:// or https://");
+    }
+    if (value.endsWith("/")) {
+      problems.push("minecraft.API.statsProxyUrl: must not end with / (the request path adds it)");
     }
   }
 }

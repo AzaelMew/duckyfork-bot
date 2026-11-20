@@ -82,6 +82,11 @@ jobs:
       # Hardcoded credentials, LAN peer IPs and host-specific paths in added
       # lines; config/cache/data/log files anywhere in the diff. Only the
       # offending file names are printed - the matched values never are.
+      # The pattern is written so it does not match its own text (this file is
+      # part of every diff that changes it). The keyword in the last
+      # alternative is spelled with [Kk] style classes because mawk has no
+      # case-insensitive matching and the repo uses apiKey/waifuItKey/token
+      # spellings; it catches a 32/40-char hex literal assigned to such a name.
       - name: forbidden patterns
         run: |
           set -euo pipefail
@@ -90,7 +95,7 @@ jobs:
           git diff "$BASE...HEAD" -U0 > "$DIFF"
 
           read -r -d '' PATTERN <<'PATTERN_EOF' || true
-          Authorization:[[:space:]]*["'][^"']{8,}["']|192[.]168[.]0[.][0-9]+|tempest[/]|imgur[^[:space:]"']*[A-Za-z0-9_-]{20,}
+          Authorization:[[:space:]]*["'][^"']{8,}["']|192[.]168[.]0[.][0-9]+|tempest[/]|imgur[^[:space:]"']*[A-Za-z0-9_-]{20,}|[?&](key|token|apikey)=[0-9A-Za-z_-]{16,}|([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[A-Za-z0-9_]*[[:space:]]*[:=][[:space:]]*["'][0-9a-fA-F]{32,40}["']
           PATTERN_EOF
 
           HITS=$(PATTERN="$PATTERN" awk 'BEGIN { p = ENVIRON["PATTERN"] } /^\+\+\+ b\// { f = substr($0, 7) } /^\+/ && $0 ~ p { print f }' "$DIFF" | sort -u || true)

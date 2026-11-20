@@ -16,13 +16,23 @@
  *     [--blacklist-path /path/to/blacklist.txt] \
  *     [--commands-enabled "*"|autoclaim,autokick,...] \
  *     [--image-compression true|false] [--retry-on-rate-limit true|false] \
- *     [--peer-rank-rank VIP+] [--peer-rank-guild-rank Elder] [--force]
+ *     [--peer-rank-rank VIP+] [--peer-rank-guild-rank Elder] \
+ *     [--stats-proxy-url http://STATS_PROXY_HOST:3000] \
+ *     [--secrets-file /path/to/secrets.json] [--force]
+ *
+ * --secrets-file is a JSON object that maps dotted config key paths to values:
+ *   {"minecraft.API.waifuItKey": "...", "minecraft.API.statsProxyKey": "..."}
+ * It exists so a key value never has to appear in argv or shell history. The
+ * file is only read; values from it are never printed, echoed or logged. A key
+ * that still holds a config.example.json placeholder is replaced by the
+ * supplied value even without --force; an existing real value is kept.
  *
  * Behaviour:
  *   - --in is never written to; --out must be a different file.
  *   - A key that already exists keeps its value ("kept") unless --force is
- *     given ("set"). Missing keys are added from the arguments or, when the
- *     argument is omitted, from config.example.json.
+ *     given ("set") or the value is still the example placeholder.
+ *   - Missing keys are added from the arguments, the secrets file or, when
+ *     neither supplies them, from config.example.json.
  *   - Only key paths are printed. Values - supplied or existing - never are.
  *   - The result is validated with scripts/check-config.js before it is
  *     reported as usable.
@@ -45,7 +55,12 @@ const USAGE = `Usage:
     [--blacklist-path <path>] [--commands-enabled "*"|name,name] \\
     [--image-compression true|false] [--retry-on-rate-limit true|false] \\
     [--peer-discord-relay true|false] \\
-    [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] [--force]
+    [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] \\
+    [--stats-proxy-url <http://host:port>] [--secrets-file <path.json>] [--force]
+
+--secrets-file takes a JSON object of dotted key paths to values, so API keys
+never appear in argv or shell history:
+  {"minecraft.API.waifuItKey": "...", "minecraft.API.statsProxyKey": "..."}
 
 Prints key paths only, never values. See docs/config.md.`;
 
@@ -64,6 +79,8 @@ const FLAGS = {
   "--peer-discord-relay": "peerDiscordRelay",
   "--peer-rank-rank": "peerRankRank",
   "--peer-rank-guild-rank": "peerRankGuildRank",
+  "--stats-proxy-url": "statsProxyUrl",
+  "--secrets-file": "secretsFile",
 };
 
 const FLAG_NAMES = Object.fromEntries(Object.entries(FLAGS).map(([flag, key]) => [key, flag]));
@@ -162,6 +179,53 @@ function sameValue(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+// Credentials and the stats proxy address. Their values are only ever read
+// from --secrets-file (or --stats-proxy-url for the URL), never from argv.
+const MANAGED_API_PATHS = ["minecraft.API.waifuItKey", "minecraft.API.statsProxyUrl", "minecraft.API.statsProxyKey"];
+
+function readSecretsFile(file) {
+  const secrets = readJsonFile(file, "secrets");
+
+  if (secrets === null || typeof secrets !== "object" || Array.isArray(secrets)) {
+    fail("--secrets-file must contain a JSON object that maps key paths to values");
+  }
+
+  for (const keyPath of Object.keys(secrets)) {
+    if (!MANAGED_API_PATHS.includes(keyPath)) {
+      // Only the offending key path is printed, never a value, and the list of
+      // managed paths is not interpolated (CodeQL reads an array of "api key"
+      // names as sensitive data once it reaches a log call).
+      fail(`--secrets-file: ${keyPath} is not a key path this script manages; see docs/config.md`);
+    }
+    const value = secrets[keyPath];
+    if (typeof value !== "string" || value.trim().length === 0) {
+      fail(`--secrets-file: ${keyPath} must be a non-empty string`);
+    }
+  }
+
+  // A file holding API keys should not be readable by other users. Only the
+  // path is printed.
+  try {
+    if ((fs.statSync(file).mode & 0o077) !== 0) {
+      console.warn(`warn  --secrets-file ${file} is accessible by other users; chmod 600 it`);
+    }
+  } catch (error) {
+    // The file was already read successfully, so this is not fatal.
+  }
+
+  return secrets;
+}
+
+// A value that is still the config.example.json placeholder may be replaced by
+// a supplied one even without --force; a real value is kept.
+function isPlaceholder(value, exampleValue) {
+  if (sameValue(value, exampleValue)) return true;
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (trimmed.includes("STATS_PROXY_HOST")) return true;
+  return /^[A-Z][A-Z0-9_]*$/.test(trimmed);
+}
+
 function commandsValue(raw) {
   const value = raw.trim();
   if (value === "*") return "*";
@@ -175,9 +239,23 @@ function commandsValue(raw) {
   return names;
 }
 
-function buildManagedKeys(options, example) {
+function buildManagedKeys(options, example, secrets) {
   const supplied = (value, fallback) => (value === undefined ? fallback : value);
   const origin = (value) => (value === undefined ? "default" : "supplied");
+
+  const fromSecrets = (keyPath, fallback) => {
+    if (secrets && Object.prototype.hasOwnProperty.call(secrets, keyPath)) {
+      return { value: secrets[keyPath], origin: "supplied" };
+    }
+    return { value: fallback, origin: "default" };
+  };
+
+  const waifuItKey = fromSecrets("minecraft.API.waifuItKey", example.minecraft.API.waifuItKey);
+  const statsProxyKey = fromSecrets("minecraft.API.statsProxyKey", example.minecraft.API.statsProxyKey);
+  const statsProxyUrl =
+    options.statsProxyUrl === undefined
+      ? fromSecrets("minecraft.API.statsProxyUrl", example.minecraft.API.statsProxyUrl)
+      : { value: options.statsProxyUrl, origin: "supplied" };
 
   const entries = [
     ["bridge.name", options.name, "supplied"],
@@ -216,6 +294,13 @@ function buildManagedKeys(options, example) {
       options.commandsEnabled === undefined ? example.discord.commands.enabled : commandsValue(options.commandsEnabled),
       origin(options.commandsEnabled),
     ],
+    // The fourth element marks a key whose value is a credential or a host
+    // address: a placeholder there is replaced by a supplied value without
+    // --force, because a host config that still holds the placeholder cannot
+    // work.
+    ["minecraft.API.waifuItKey", waifuItKey.value, waifuItKey.origin, true],
+    ["minecraft.API.statsProxyUrl", statsProxyUrl.value, statsProxyUrl.origin, true],
+    ["minecraft.API.statsProxyKey", statsProxyKey.value, statsProxyKey.origin, true],
   ];
 
   return entries;
@@ -250,13 +335,16 @@ function main() {
 
   const example = readJsonFile(EXAMPLE_PATH, "schema");
   const config = readJsonFile(inputPath, "config");
+  const secrets = options.secretsFile === undefined ? undefined : readSecretsFile(options.secretsFile);
 
-  const report = { added: [], kept: [], replaced: [], defaults: [], differs: [] };
+  const report = { added: [], kept: [], replaced: [], defaults: [], differs: [], replacedPlaceholders: [] };
 
-  for (const [keyPath, value, origin] of buildManagedKeys(options, example)) {
+  for (const [keyPath, value, origin, apiKey] of buildManagedKeys(options, example, secrets)) {
     const existing = getPath(config, keyPath);
+    const exampleValue = getPath(example, keyPath).value;
+    const placeholder = existing.found && apiKey === true && isPlaceholder(existing.value, exampleValue);
 
-    if (existing.found && !options.force) {
+    if (existing.found && !options.force && !(placeholder && origin === "supplied")) {
       report.kept.push(keyPath);
       if (!sameValue(existing.value, value)) {
         report.differs.push(keyPath);
@@ -266,6 +354,7 @@ function main() {
 
     if (existing.found) {
       report.replaced.push(keyPath);
+      if (placeholder) report.replacedPlaceholders.push(keyPath);
     } else {
       report.added.push(keyPath);
     }
@@ -280,6 +369,9 @@ function main() {
   for (const entry of report.kept) console.log(`kept  ${entry}`);
   for (const entry of report.replaced) console.log(`set   ${entry}`);
   for (const entry of report.added) console.log(`added ${entry}`);
+  for (const entry of report.replacedPlaceholders) {
+    console.log(`note  ${entry}: held the config.example.json placeholder, replaced by the supplied value`);
+  }
   for (const entry of report.differs) {
     console.log(`note  ${entry}: already set and left alone (--force would replace it with the supplied value)`);
   }

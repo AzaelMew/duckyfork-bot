@@ -9,7 +9,7 @@ async function getBonk() {
     return new Promise((resolve, reject) => {
         try {
             axios.get('https://waifu.it/api/v4/bonk', {headers: {
-                Authorization: "MTE1ODczMTg5Mjk2MzQwOTk3.MTc0MDgyOTY5Mw--.dda9bc1a1eb",
+                Authorization: config.minecraft.API.waifuItKey,
             }})
                 .then(response => {
                     const data = response.data;

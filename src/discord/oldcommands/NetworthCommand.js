@@ -111,7 +111,7 @@ async function getNetworthFromUUID(name) {
     }
     if (name == "f03695547707486ab2308518f04102f7") return
 
-    const { data } = await axios.get("http://192.168.0.7:3000/v2/profiles/" + name + "?key=77ac89bad625453facaa36457eb3cf5c")
+    const { data } = await axios.get(`${config.minecraft.API.statsProxyUrl}/v2/profiles/${name}?key=${config.minecraft.API.statsProxyKey}`)
     let total = data.data[0]?.networth?.networth ?? 0
     let purse = data.data[0]?.purse ?? 0
     let bank = data.data[0]?.bank ?? 0
