@@ -98,7 +98,9 @@ jobs:
           Authorization:[[:space:]]*["'][^"']{8,}["']|192[.]168[.]0[.][0-9]+|tempest[/]|imgur[^[:space:]"']*[A-Za-z0-9_-]{20,}|[?&](key|token|apikey)=[0-9A-Za-z_-]{16,}|([Kk][Ee][Yy]|[Tt][Oo][Kk][Ee][Nn]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn])[A-Za-z0-9_]*[[:space:]]*[:=][[:space:]]*["'][0-9a-fA-F]{32,40}["']
           PATTERN_EOF
 
-          HITS=$(PATTERN="$PATTERN" awk 'BEGIN { p = ENVIRON["PATTERN"] } /^\+\+\+ b\// { f = substr($0, 7) } /^\+/ && $0 ~ p { print f }' "$DIFF" | sort -u || true)
+          # Lockfiles hold package names, URLs and integrity hashes only; they are
+          # reviewed by the dependency checks in pr-risk.js, not by this scan.
+          HITS=$(PATTERN="$PATTERN" awk 'BEGIN { p = ENVIRON["PATTERN"] } /^\+\+\+ b\// { f = substr($0, 7) } /^\+/ && f !~ /(^|\/)(package-lock\.json|pnpm-lock\.yaml)$/ && $0 ~ p { print f }' "$DIFF" | sort -u || true)
           if [ -n "$HITS" ]; then
             echo "::error::forbidden pattern in added lines (values not printed)"
             printf '%s\n' "$HITS"
