@@ -8,7 +8,7 @@
  * concatenation; these tests assert the config-driven code produces exactly the
  * same request with the same (fake) values.
  *
- * Every value here is fake: `http://stats-proxy.test:3000`, `test-stats-key`,
+ * Every value here is fake: `http://localhost:3000`, `test-stats-key`,
  * `test-waifu-key`. Nothing in this file is or was a real credential.
  */
 const fs = require("fs");
@@ -26,24 +26,19 @@ const ROOT = path.join(__dirname, "..");
 
 // Fake UUID, not a real player and not a credential.
 const FAKE_UUID = "0123456789abcdef0123456789abcdef";
-const FAKE_STATS_URL = "http://stats-proxy.test:3000";
+const FAKE_STATS_URL = "http://localhost:3000";
 const FAKE_STATS_KEY = "test-stats-key";
 const FAKE_WAIFU_KEY = "test-waifu-key";
 
 function stubConfig() {
+  // Everything the tested modules do not read keeps the config.example.json
+  // value; only the three keys under test, the bridge token and a local peer
+  // address are set here.
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, "config.example.json"), "utf8"));
   config.web.token = "test-web-token";
-  config.bridge = {
-    name: "Sky",
-    peerUrl: "http://peer.test:3001",
-    peerGuild: "aria",
-    mirrorOnSend: true,
-    relayBangCommands: true,
-    peerRank: { rank: "VIP+", guildRank: "Elder" },
-  };
-  config.features = { retryOnRateLimit: true, imageCompression: true, peerDiscordRelay: true };
-  config.paths = { blacklist: "./data/blacklist.txt" };
-  config.discord.commands.enabled = "*";
+  // contracts/bridge.js validates these at require time; 127.0.0.1 keeps the
+  // request targets local (nothing here talks to a peer).
+  config.bridge = { ...config.bridge, name: "Sky", peerUrl: "http://127.0.0.1:3001", peerGuild: "aria" };
   config.minecraft.API.waifuItKey = FAKE_WAIFU_KEY;
   config.minecraft.API.statsProxyUrl = FAKE_STATS_URL;
   config.minecraft.API.statsProxyKey = FAKE_STATS_KEY;
@@ -170,7 +165,7 @@ describe("waifu.it call sites read config.minecraft.API.waifuItKey", () => {
   });
 
   it("minecraft !bonk sends the config token as the Authorization header", () => {
-    axiosMock.get.mockResolvedValue({ data: { url: "https://example.test/bonk.gif" } });
+    axiosMock.get.mockResolvedValue({ data: { url: "http://127.0.0.1:3000/image.gif" } });
 
     // eslint-disable-next-line global-require
     const BonkCommand = require("../src/minecraft/commands/bonkCommand.js");
@@ -184,7 +179,7 @@ describe("waifu.it call sites read config.minecraft.API.waifuItKey", () => {
 
   it("discord !stab sends the config token as the Authorization header", () => {
     jest.useFakeTimers();
-    axiosMock.get.mockResolvedValue({ data: { url: "https://example.test/stab.gif" } });
+    axiosMock.get.mockResolvedValue({ data: { url: "http://127.0.0.1:3000/image.gif" } });
 
     // eslint-disable-next-line global-require
     const StabCommand = require("../src/discord/oldcommands/StabCommand.js");
@@ -293,7 +288,7 @@ describe("migrate-config.js --secrets-file", () => {
         "--name",
         "Sky",
         "--peer-url",
-        "http://peer.test:3001",
+        "http://127.0.0.1:3001",
         "--peer-guild",
         "aria",
         "--secrets-file",
