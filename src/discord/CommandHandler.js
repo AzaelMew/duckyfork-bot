@@ -1,6 +1,7 @@
 // eslint-disable-next-line import/extensions
 const { Routes } = require("discord-api-types/v9");
 const config = require("../../config.json");
+const commandFilter = require("../contracts/commandFilter.js");
 const { REST } = require("@discordjs/rest");
 const { Collection } = require('discord.js')
 const Logger = require(".././Logger.js");
@@ -19,6 +20,9 @@ class CommandHandler {
       if (command.verificationCommand === true && config.verification.enabled === false) {
         continue;
       }
+      if (commandFilter.isEnabled("slash", command.name) === false) {
+        continue;
+      }
 
       commands.push(command);
     }
@@ -32,6 +36,9 @@ class CommandHandler {
     let oldcommandFiles = fs.readdirSync('./src/discord/oldcommands').filter(file => file.endsWith('.js'))
     for (const file of oldcommandFiles) {
       const oldcommand = new (require(`./oldcommands/${file}`))(discord)
+      if (commandFilter.isEnabled("old", oldcommand.name) === false) {
+        continue
+      }
       this.oldcommands.set(oldcommand.name, oldcommand)
     }
     rest.put(Routes.applicationGuildCommands(clientID, config.discord.bot.serverID), { body: commands }).catch(console.error);

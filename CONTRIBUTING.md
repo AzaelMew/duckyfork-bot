@@ -39,6 +39,14 @@ npx jest --forceExit --runInBand
 `scripts/lint-ratchet.js` only fails on errors a PR adds: the repo has ~488
 pre-existing ESLint errors, so `npm run lint` is not a gate.
 
+## Config
+
+Every difference between the two bots lives in `config.json` (peer address, bot
+name, which Discord commands load, retry/compression flags). The key list, the
+Sky and Aria values, and the migration script are documented in
+[docs/config.md](docs/config.md). `src/contracts/bridge.js` throws at startup
+when a required key is missing, so a half-migrated config fails loudly.
+
 ## Things that bite in this bot
 
 - Every `this.send()` in a command is mirrored to the peer bot's guild chat, so

@@ -85,10 +85,16 @@ class MinecraftManager extends CommunicationBridge {
       }
     };
 
-    await bridge.postToPeer("/api/command", { message: `${chat} ${message} ${generateID(10)}` })
+    // Sky mirrors the line to the peer and appends a {id} so Hypixel does not
+    // reject it as a repeated message. Aria neither mirrors nor appends here
+    // (it only mirrors from contracts/minecraftCommand.send), so the flag
+    // covers both halves of that difference.
+    if (config.bridge.mirrorOnSend) {
+      await bridge.postToPeer("/api/command", { message: `${chat} ${message} ${generateID(10)}` })
+    }
 
     bot.on("message", messageListener);
-    this.bot.chat(`${chat} ${message} ${generateID(10)}`);
+    this.bot.chat(config.bridge.mirrorOnSend ? `${chat} ${message} ${generateID(10)}` : `${chat} ${message}`);
 
     setTimeout(() => {
       bot.removeListener("message", messageListener);
