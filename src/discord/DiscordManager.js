@@ -9,27 +9,19 @@ const config = require("../../config.json");
 const Logger = require(".././Logger.js");
 const path = require("node:path");
 const fs = require("fs");
-const axios = require('axios');
+const bridge = require("../contracts/bridge.js");
 const { description } = require("./commands/updateCommand.js");
+
 async function apicall(username, message, type, guildRank) {
-  try {
-    const response = await axios.post(
-      'http://192.168.0.6:3001/api/message',
-      { author: username, guild: "aria", message, type, guildRank }, // Simplified object property assignment
-      {
-        headers: {
-          Authorization: require("../../config.json").web.token
-        }
-      }
-    )
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused: Aria is offline');
-    } else {
-      console.error('An error occurred:', error.message);
-    }
-  }
+  return bridge.postToPeer("/api/message", {
+    author: username,
+    guild: bridge.peerGuild,
+    message: message,
+    type: type,
+    guildRank: guildRank,
+  });
 }
+
 class DiscordManager extends CommunicationBridge {
   constructor(app) {
     super();
@@ -134,7 +126,7 @@ class DiscordManager extends CommunicationBridge {
       imgurUrl = "";
     }
     await apicall(username, message, chat||"Guild", guildRank,)
-    guildRank = `${guildRank} - Sky`
+    guildRank = `${guildRank} - ${bridge.name}`
 
     switch (mode) {
       case "bot":
@@ -230,7 +222,7 @@ class DiscordManager extends CommunicationBridge {
           },
           description: message,
           footer: {
-            text: "Sky",
+            text: bridge.name,
           },
           timestamp: new Date(),
         },
@@ -313,13 +305,9 @@ class DiscordManager extends CommunicationBridge {
 
         //sends to other bridge
         if (username !== this.app.minecraft.bot.username) {
-          axios.post('http://192.168.0.6:3001/api/message', { author: username, guild: "aria", message: message, type: "Officer", guildRank: guildRank }, {
-            headers: {
-              Authorization: require("../../config.json").web.token
-            }
-          })
+          bridge.postToPeer("/api/message", { author: username, guild: bridge.peerGuild, message: message, type: "Officer", guildRank: guildRank })
         }
-        guildRank = `${guildRank} - Sky`
+        guildRank = `${guildRank} - ${bridge.name}`
 
         channel.send({
           embeds: [{
@@ -363,7 +351,7 @@ class DiscordManager extends CommunicationBridge {
     if (username !== this.app.minecraft.bot.username) {
       apicall(username, overflow, "Guild", guildRank)
     }
-    guildRank = `${guildRank} - Sky`
+    guildRank = `${guildRank} - ${bridge.name}`
 
     Logger.broadcastMessage(`${username} [${guildRank}]: ${message}`, "Event")
     switch (config.discord.other.messageMode.toLowerCase()) {

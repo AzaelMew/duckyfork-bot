@@ -1,6 +1,7 @@
 const { uploadImage } = require("../../contracts/API/imgurAPI.js");
 const { demojify } = require("discord-emoji-converter");
 const config = require("../../../config.json");
+const bridge = require("../../contracts/bridge.js");
 
 const uploader = require('../../contracts/Imgur/imgurExport');
 
@@ -9,17 +10,6 @@ const path = require('path');
 const sharp = require("sharp")
 const axios = require('axios');
 const { url } = require("inspector");
-async function apicall(message) {
-  try {
-    const response = await axios.post('http://192.168.0.6:3001/api/command', { message: message }, { headers: { Authorization: require("../../../config.json").web.token } })
-  } catch (error) {
-    if (error.code === 'ECONNREFUSED') {
-      console.error('Connection refused: Aria is offline');
-    } else {
-      console.error('An error occurred:', error.message);
-    }
-  }
-}
 async function compressImage(imagePath, maxSizeMB = 10, qualityReductionStep = 5) {
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
 
@@ -270,7 +260,7 @@ class MessageHandler {
                 return part.length == 0 ? '' : part + ' '
               })
               .join('')
-            apicall(`/gc ${message.member.displayName}: ${catContent}`)
+            bridge.postToPeer("/api/command", { message: `/gc ${message.member.displayName}: ${catContent}` });
             this.discord.broadcastMessage({
               username: message.member.displayName,
               message: catContent

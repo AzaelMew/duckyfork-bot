@@ -39,7 +39,7 @@ class BlacklistCommand extends minecraftCommand {
         }
         let args = message.split(" ")
         getUUIDFromUsername(args[2]).then(uuid => {
-            let blacklist = fs.readFileSync('/tempest/blacklist.txt', 'utf-8');
+            let blacklist = fs.readFileSync(config.paths.blacklist, 'utf-8');
             let blacklistedIDs = blacklist.trim().split('\n');
             if (args[1] == "add") {
                 if (!blacklist.includes(uuid)) {
@@ -47,7 +47,7 @@ class BlacklistCommand extends minecraftCommand {
                     blacklist += uuid + "\n";
 
                     // write the updated blacklist back to the file
-                    fs.writeFileSync('/tempest/blacklist.txt', blacklist, 'utf-8');
+                    fs.writeFileSync(config.paths.blacklist, blacklist, 'utf-8');
                 }
                 else{
                     this.send(`/oc ${args[2]} is already in the blacklist.`)

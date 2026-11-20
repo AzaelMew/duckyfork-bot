@@ -43,7 +43,7 @@ class BlacklistCommand extends DiscordCommand {
     if (message.channel.id != "1074902281130086410") return
     let args = this.getArgs(message)
     getUUIDFromUsername(args[1]).then(async uuid => {
-      let blacklist = fs.readFileSync('/tempest/blacklist.txt', 'utf-8');
+      let blacklist = fs.readFileSync(config.paths.blacklist, 'utf-8');
       let blacklistedIDs = blacklist.trim().split('\n');
       if (args[0] == "add") {
         if (!blacklist.includes(uuid)) {
@@ -65,7 +65,7 @@ class BlacklistCommand extends DiscordCommand {
           blacklist += uuid + "\n";
 
           // write the updated blacklist back to the file
-          fs.writeFileSync('/tempest/blacklist.txt', blacklist, 'utf-8');
+          fs.writeFileSync(config.paths.blacklist, blacklist, 'utf-8');
         }
         else {
           message.channel.send({
@@ -107,7 +107,7 @@ class BlacklistCommand extends DiscordCommand {
 
           // write the updated blacklist back to the file
           blacklist = blacklistedIDs.join('\n') + '\n';
-          fs.writeFileSync('/tempest/blacklist.txt', blacklist, 'utf-8');
+          fs.writeFileSync(config.paths.blacklist, blacklist, 'utf-8');
         }
       }
       else if (args[0] == "check") {

@@ -1,7 +1,7 @@
 const { ApplicationFlagsBitField } = require('discord.js');
 const DiscordCommand = require('../../contracts/DiscordCommand')
 const { Embed } = require("../../contracts/embedHandler.js");
-const axios = require("axios")
+const bridge = require("../../contracts/bridge.js")
 const fs = require('fs');
 
 let dataFilePath = "/tempest/guildData.json"
@@ -141,7 +141,7 @@ class GuildList extends DiscordCommand {
 
   async onCommand(cat) {
     let skyData = await executeCommand(bot)
-    const { data } = await axios.post('http://192.168.0.6:3001/api/list', { message: "a" }, { headers: { Authorization: require("../../../config.json").web.token } })
+    const { data } = await bridge.postToPeer("/api/list", { message: "a" })
     const combinedData = deepMergeGuildData(skyData, data.data)
     const description = `**Total Members** ${combinedData.totalMembers}\n**Online Members:** ${combinedData.onlineMembers}\n${sortOnline(combinedData.online).join("\n")}`;
     const embed = new Embed("#2ECC71", "Guild List", description);

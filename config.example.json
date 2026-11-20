@@ -89,7 +89,8 @@
       "checkPerms": true,
       "commandRole": "COMMAND_ROLE_ID",
       "blacklistRoles": ["BLACKLIST_ROLE_ID"],
-      "users": ["486155512568741900"]
+      "users": ["486155512568741900"],
+      "enabled": "*"
     },
     "other": {
       "messageMode": "minecraft",
@@ -104,6 +105,24 @@
     "enabled": false,
     "port": 1439,
     "token": "WEBSOCKET_TOKEN"
+  },
+  "bridge": {
+    "name": "BOT_NAME",
+    "peerUrl": "http://PEER_HOST:3001",
+    "peerGuild": "peer",
+    "mirrorOnSend": true,
+    "relayBangCommands": true,
+    "peerRank": {
+      "rank": "PEER_RANK",
+      "guildRank": "PEER_GUILD_RANK"
+    }
+  },
+  "features": {
+    "retryOnRateLimit": true,
+    "imageCompression": true
+  },
+  "paths": {
+    "blacklist": "./data/blacklist.txt"
   },
   "verification": {
     "enabled": false,

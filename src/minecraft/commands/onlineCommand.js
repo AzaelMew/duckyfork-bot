@@ -1,7 +1,7 @@
 const { ApplicationFlagsBitField } = require('discord.js');
 const minecraftCommand = require("../../contracts/minecraftCommand.js");
 const { Embed } = require("../../contracts/embedHandler.js");
-const axios = require("axios")
+const bridge = require("../../contracts/bridge.js")
 const fs = require('fs');
 const Canvas = require('canvas');
 const imgur = require('imgur-anonymous-uploader');
@@ -486,7 +486,7 @@ class GuildList extends minecraftCommand {
 
   async onCommand() {
     let skyData = await executeCommand(bot)
-    const { data } = await axios.post('http://192.168.0.6:3001/api/online', { message: "a" }, { headers: { Authorization: require("../../../config.json").web.token } })
+    const { data } = await bridge.postToPeer("/api/online", { message: "a" })
     const combinedData = deepMergeGuildData(skyData, data.data)
     const descriptionImg = `${sortOnline(combinedData.online).join("\n")}\n\n**Total Members:** ${combinedData.totalMembers}   |   (${combinedData.skyTotalMembers}/${combinedData.ariaTotalMembers})\n**Online Members:** ${combinedData.onlineMembers}   |   (${combinedData.skyOnlineMembers}/${combinedData.ariaOnlineMembers})`;
 
