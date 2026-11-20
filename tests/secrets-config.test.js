@@ -327,7 +327,7 @@ describe("migrate-config.js --secrets-file", () => {
 
     const result = run();
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("minecraft.API.notAKey is not managed");
+    expect(result.stderr).toContain("minecraft.API.notAKey is not a key path this script manages");
     expect(fs.existsSync(outputPath)).toBe(false);
   });
 });

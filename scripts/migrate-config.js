@@ -181,7 +181,7 @@ function sameValue(a, b) {
 
 // Credentials and the stats proxy address. Their values are only ever read
 // from --secrets-file (or --stats-proxy-url for the URL), never from argv.
-const API_KEYS = ["minecraft.API.waifuItKey", "minecraft.API.statsProxyUrl", "minecraft.API.statsProxyKey"];
+const MANAGED_API_PATHS = ["minecraft.API.waifuItKey", "minecraft.API.statsProxyUrl", "minecraft.API.statsProxyKey"];
 
 function readSecretsFile(file) {
   const secrets = readJsonFile(file, "secrets");
@@ -191,8 +191,11 @@ function readSecretsFile(file) {
   }
 
   for (const keyPath of Object.keys(secrets)) {
-    if (!API_KEYS.includes(keyPath)) {
-      fail(`--secrets-file: ${keyPath} is not managed by this script (expected one of: ${API_KEYS.join(", ")})`);
+    if (!MANAGED_API_PATHS.includes(keyPath)) {
+      // Only the offending key path is printed, never a value, and the list of
+      // managed paths is not interpolated (CodeQL reads an array of "api key"
+      // names as sensitive data once it reaches a log call).
+      fail(`--secrets-file: ${keyPath} is not a key path this script manages; see docs/config.md`);
     }
     const value = secrets[keyPath];
     if (typeof value !== "string" || value.trim().length === 0) {
