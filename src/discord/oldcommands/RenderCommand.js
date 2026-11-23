@@ -223,19 +223,13 @@ async function getPlayer(player, profile) {
     if (hypixelResponse.data.profiles === null) throw new Error(`Couldn\'t find any Skyblock profile that belongs to ${player}`);
     let profileData = await getLastProfile(hypixelResponse.data);
     if (profile) {
-        profileData = hypixelResponse.profiles.find((p) => p.cute_name.toLowerCase() === profile.toLowerCase()) || getLastProfile(hypixelResponse.data);
+        profileData = hypixelResponse.data.profiles.find((p) => p.cute_name.toLowerCase() === profile.toLowerCase()) || getLastProfile(hypixelResponse.data);
     }
     if (!profileData) throw new Error(`Couldn't find the specified Skyblock profile that belongs to ${player}.`);
     return { memberData: profileData.members[mojangResponse], profileData, profiles: hypixelResponse.profiles };
 }
-async function getData(message) {
-    let { 1: username, 2: profile, 3: itemNumber } = message.split(' ');
-    if (!isNaN(Number(profile))) {
-        itemNumber = profile;
-        profile = undefined
-    }
-
-    if (itemNumber < 1 || itemNumber > 9 || !itemNumber)
+async function getData(username, profile, itemNumber) {
+    if (!/^[1-9]$/.test(itemNumber))
         return "Invalid item number. Must be between 1 and 9."
 
     const searchedPlayer = await getPlayer(username, profile).catch((err) => {
@@ -243,7 +237,7 @@ async function getData(message) {
     });
     const playerProfile = searchedPlayer.memberData;
 
-    const inventory = playerProfile?.inventory.inv_contents?.data;
+    const inventory = playerProfile?.inventory?.inv_contents?.data;
     if (!inventory) {
         return " has no items in their inventory or has their inventory API disabled."
     }
@@ -259,7 +253,7 @@ async function getData(message) {
     const uploadResponse = await uploader.uploadBuffer(renderedItem);
     if (!uploadResponse.url) return `Failed to upload image.`;
 
-    return `${uploadResponse.url}AWSSAW${username}`
+    return uploadResponse.url
 }
 async function getUUIDFromUsername(username) {
     if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
@@ -285,14 +279,24 @@ class RenderCommand extends DiscordCommand {
         super(discord)
         this.permission = "all"
         this.name = 'render'
-        this.description = 'renders specified slot'
+        this.description = 'Renders an item from a hotbar slot. Use !render <slot> for your default IGN.'
     }
 
-     onCommand(message) {
-        getData(message.content).then(returnurl => {
-            returnurl = returnurl.split("AWSSAW")
-            let username = returnurl[1]
-            returnurl = returnurl[0]
+    async onCommand(message) {
+        const [command, target, second, third] = message.content.trim().split(/\s+/);
+        if (!target) {
+            return message.channel.send(`Usage: \`${command} <slot>\` or \`${command} <IGN> [profile] <slot>\`.`);
+        }
+
+        const useDefault = target === "--me" || (!second && /^[1-9]$/.test(target));
+        const username = useDefault
+            ? await this.getDefaultPlayerTarget(message, `${command} <IGN> <slot>`)
+            : target;
+        if (!username) return;
+
+        const profile = third && isNaN(Number(second)) ? second : undefined;
+        const itemNumber = profile ? third : (second ?? target);
+        return getData(username, profile, itemNumber).then(returnurl => {
             if(returnurl.toString().includes("imgur")){
                 let game = Encode(returnurl)
                 this.sendMinecraftMessage(`/gc ${username}: ${game}`)

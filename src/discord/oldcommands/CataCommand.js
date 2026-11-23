@@ -104,10 +104,9 @@ class CatacombsCommand extends DiscordCommand {
       this.description = "Says users dungeon stats"
     }
 
-  onCommand(message) {
-  
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     getDungeonFromUsername(user).then(stats => {
       if(stats.includes("[ERROR]")){
         this.sendMinecraftMessage(`/gc ${stats}`)

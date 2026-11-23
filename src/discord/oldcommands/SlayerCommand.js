@@ -73,10 +73,9 @@ class SlayerCommand extends DiscordCommand {
       this.description = "Says users slayers"
     }
   
-  onCommand(message) {
-    
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     getSlayerFromUser(user).then(stats => {
       if (stats.includes("[ERROR]")) {
         this.sendMinecraftMessage(`/gc ${stats}`)

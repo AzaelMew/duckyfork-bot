@@ -304,6 +304,13 @@ The autoLimbo is ability to toggle if the bot is sent to Limbo or stays in publi
 | unmute    | Unmutes the given user.                          | `/unmute [player]`          | `/unmute DuckySoSkilled`            | ![](https://imgur.com/nlu8lo6.png) |
 | uptime    | Shows the uptime of the bot.                     | `/uptime`                   | `/uptime`                           | ![](https://imgur.com/R1cnJfn.png) |
 
+#### Default Minecraft IGN for Discord commands
+
+- Run `!ign <IGN>` once to save your Minecraft name for player lookups. Run `!ign` to see your current default or `!ign --clear` to remove your preference.
+- Run `!nw` to look up your own networth, or `!nw <IGN>` to look up another player. The same default applies to `!networth`, `!stats`, `!skills`, `!cata`, `!kuudra`, `!slayer`, `!seen`, `!stalk`, and `!member`.
+- Run `!render <slot>` for an item from your default IGN, or `!render --me <profile> <slot>` to choose its SkyBlock profile. Use `!render <IGN> [profile] <slot>` for another player.
+- If you have a Minecraft account linked through verification, the bot uses it when you have no saved preference. Saving an IGN only sets a lookup preference and grants no roles. When using a command allowlist, enable `old:ign` to let users set their preference.
+
 `Minecraft`
 
 | Command      | Description                                 | Syntax                         | Example                    | Response                                                                                                                                                                                                                     |

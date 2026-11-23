@@ -122,9 +122,9 @@ class StatsCommand extends DiscordCommand {
     this.description = `Checks user's stats`
   }
 
-  onCommand(message) {
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     
     getStatsFromUsername(user).then(stats => {
       if (stats.includes("[ERROR]")) {

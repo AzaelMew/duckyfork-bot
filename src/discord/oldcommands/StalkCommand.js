@@ -158,11 +158,9 @@ class StalkCommand extends DiscordCommand {
         this.description = `Checks user's location`
     }
 
-    onCommand(message) {
-
-
-        let args = this.getArgs(message)
-        let user = args.shift()
+    async onCommand(message) {
+        const user = await this.getPlayerTarget(message);
+        if (!user) return;
         try {
             getLocationFromUsername(user).then(location => {
                 if (location == "Player is Offline") {
