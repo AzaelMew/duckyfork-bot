@@ -137,9 +137,9 @@ class SeenCommand extends DiscordCommand {
         this.description = `Shows user's last logout date`;
     }
 
-    onCommand(message) {
-        let args = this.getArgs(message);
-        let user = args.shift();
+    async onCommand(message) {
+        const user = await this.getPlayerTarget(message);
+        if (!user) return;
         getSeenFromUsername(user).then(stats => {
             message.channel.send({
                 embeds: [{

@@ -79,10 +79,9 @@ class KuudraCommand extends DiscordCommand {
       this.description = "Says users kuudra stats"
     }
 
-  onCommand(message) {
-  
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     getKuudraFromUsername(user).then(stats => {
       if(stats.includes("[ERROR]")){
         this.sendMinecraftMessage(`/gc ${stats}`)

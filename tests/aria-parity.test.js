@@ -283,10 +283,11 @@ describe("discord.commands.enabled", () => {
     const { loaded } = load(skyConfig(), "src/discord/CommandHandler.js");
     const handler = new loaded({});
 
-    expect(handler.oldcommands.size).toBe(43);
+    expect(handler.oldcommands.size).toBe(44);
     // The slash registration payload is checked separately below; here just
     // prove the legacy loader is unfiltered.
     expect(handler.oldcommands.has("help")).toBe(true);
+    expect(handler.oldcommands.has("ign")).toBe(true);
   });
 
   it("Aria: only the nine legacy commands load, and no slash command is registered", () => {

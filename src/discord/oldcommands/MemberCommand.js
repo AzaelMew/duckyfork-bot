@@ -117,9 +117,9 @@ class MemberCommand extends DiscordCommand {
     this.description = 'Returns Guild Top EXP from specified day'
   }
 
-  onCommand(message) {
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     getGMemberFromUsername(user).then(ret => {
       if(ret.includes("[ERROR]")){
         message.channel.send({

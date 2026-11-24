@@ -81,10 +81,9 @@ class SkillsCommand extends DiscordCommand {
     this.description = `Checks user's skills`
   }
 
-  onCommand(message) {
-  
-    let args = this.getArgs(message)
-    let user = args.shift()
+  async onCommand(message) {
+    const user = await this.getPlayerTarget(message);
+    if (!user) return;
     getSkillsFromUsername(user).then(skills => {
       if(skills.includes("[ERROR]")){
         this.sendMinecraftMessage(`/gc ${skills}`)
