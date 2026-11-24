@@ -54,4 +54,8 @@ function isEnabled(kind, name) {
   return list.includes(lower) || list.includes(`${kind}:${lower}`);
 }
 
-module.exports = { isEnabled, enabledList };
+function getPrefix() {
+  return config.discord?.commands?.prefix ?? "!";
+}
+
+module.exports = { isEnabled, enabledList, getPrefix };

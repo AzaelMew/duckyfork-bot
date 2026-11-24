@@ -31,7 +31,7 @@ class CommandHandler {
 
     const clientID = Buffer.from(config.discord.bot.token.split(".")[0], "base64").toString("ascii");
 
-    this.prefix = config.discord.commands.prefix
+    this.prefix = commandFilter.getPrefix()
     this.oldcommands = new Collection()
     let oldcommandFiles = fs.readdirSync('./src/discord/oldcommands').filter(file => file.endsWith('.js'))
     for (const file of oldcommandFiles) {

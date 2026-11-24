@@ -1,5 +1,4 @@
 const bridge = require("./bridge.js");
-const config = require("../../config.json");
 const commandFilter = require("./commandFilter.js");
 const { getCommandIgn } = require("../discord/commandIgn.js");
 
@@ -17,7 +16,7 @@ class DiscordCommand {
   }
 
   prefixCommand(name) {
-    return `${config.discord.commands.prefix}${name}`;
+    return `${commandFilter.getPrefix()}${name}`;
   }
 
   async getPlayerTarget(message) {

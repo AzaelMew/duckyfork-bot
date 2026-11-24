@@ -32,8 +32,16 @@ function clearCommandIgn(discordId) {
 
 async function getCommandIgn(discordId) {
   const savedUuid = readIfPresent(path.join(directory, discordId));
-  const uuid = savedUuid ?? JSON.parse(readIfPresent("data/linked.json") ?? "{}")[discordId];
-  return uuid ? getUsername(uuid) : null;
+  if (savedUuid) {
+    try {
+      return await getUsername(savedUuid);
+    } catch (error) {
+      if (error !== "Invalid UUID.") throw error;
+    }
+  }
+
+  const verifiedUuid = JSON.parse(readIfPresent("data/linked.json") ?? "{}")[discordId];
+  return verifiedUuid && verifiedUuid !== savedUuid ? getUsername(verifiedUuid) : null;
 }
 
 module.exports = { setCommandIgn, clearCommandIgn, getCommandIgn };

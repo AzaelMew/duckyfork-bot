@@ -1,5 +1,5 @@
 const DiscordCommand = require("../../contracts/DiscordCommand.js");
-const { getUUID } = require("../../contracts/API/mowojangAPI.js");
+const { getUUID, getUsername } = require("../../contracts/API/mowojangAPI.js");
 const { clearCommandIgn, getCommandIgn, setCommandIgn } = require("../commandIgn.js");
 
 class IgnCommand extends DiscordCommand {
@@ -23,8 +23,10 @@ class IgnCommand extends DiscordCommand {
         clearCommandIgn(discordId);
         reply = "Your saved IGN preference was cleared. If you have a verified Minecraft account, lookups will use it.";
       } else if (ign) {
-        setCommandIgn(discordId, await getUUID(ign));
-        reply = `Your default Minecraft IGN is now \`${ign}\`.`;
+        const uuid = await getUUID(ign);
+        const username = await getUsername(uuid);
+        setCommandIgn(discordId, uuid);
+        reply = `Your default Minecraft IGN is now \`${username}\`.`;
       } else {
         const current = await getCommandIgn(discordId);
         reply = current

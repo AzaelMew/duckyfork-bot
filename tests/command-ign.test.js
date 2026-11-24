@@ -4,19 +4,14 @@ const os = require("os");
 const path = require("path");
 const axios = require("axios");
 const { Collection } = require("discord.js");
+const commandFilter = require("../src/contracts/commandFilter.js");
 const CommandHandler = require("../src/discord/CommandHandler.js");
 const IgnCommand = require("../src/discord/oldcommands/IgnCommand.js");
 const NetworthCommand = require("../src/discord/oldcommands/NetworthCommand.js");
 const RenderCommand = require("../src/discord/oldcommands/RenderCommand.js");
 
 jest.mock("axios");
-jest.mock("../config.json", () => {
-  const config = jest.requireActual("../config.example.json");
-  return {
-    ...config,
-    discord: { ...config.discord, commands: { ...config.discord.commands, prefix: "!" } },
-  };
-});
+jest.mock("../config.json", () => jest.requireActual("../config.example.json"));
 jest.mock("../src/Logger.js", () => ({ webMessage: jest.fn() }));
 jest.mock("../src/contracts/bridge.js", () => ({ postToPeer: jest.fn() }));
 jest.mock("prismarine-nbt", () => ({
@@ -45,7 +40,7 @@ beforeEach(() => {
   axios.get.mockReset();
 
   handler = Object.create(CommandHandler.prototype);
-  handler.prefix = "!";
+  handler.prefix = commandFilter.getPrefix();
   const commands = [IgnCommand, NetworthCommand, RenderCommand].map((Command) => new Command({ app: { minecraft } }));
   handler.oldcommands = new Collection(commands.map((command) => [command.name, command]));
 });
@@ -76,10 +71,11 @@ function mockProfiles() {
     members: { [savedUuid]: { inventory }, [otherUuid]: { inventory } },
   };
   axios.get.mockImplementation(async (url) => {
-    if (url.endsWith("/ExampleIGN")) return { data: { id: savedUuid, name: "ExampleIGN" } };
-    if (url.endsWith("/RenamedIGN")) return { data: { id: savedUuid, name: "RenamedIGN" } };
+    if (url.toLowerCase().endsWith("/exampleign") || url.endsWith(`/${savedUuid}`)) return { data: { id: savedUuid, name: "ExampleIGN" } };
     if (url.endsWith("/OtherPlayer") || url.endsWith(`/${otherUuid}`)) return { data: { id: otherUuid, name: "OtherPlayer" } };
-    if (url.endsWith(`/${savedUuid}`)) return { data: { id: savedUuid, name: "RenamedIGN" } };
+    if (url.endsWith("/unresolvable-uuid")) {
+      throw Object.assign(new Error("Not found"), { response: { status: 404, data: "Not found" } });
+    }
     if (url.includes("/skyblock/profiles?")) return { data: { profiles: [profile, alternateProfile] } };
     if (url.includes("/skyblock/museum?")) return { data: { members: {} } };
     throw new Error(`Unexpected request: ${url}`);
@@ -88,13 +84,13 @@ function mockProfiles() {
 
 it("looks up the saved account for !nw and lets an explicit IGN override it", async () => {
   mockProfiles();
-  expect(await run("!ign ExampleIGN")).toContain("ExampleIGN");
-  expect(await run("!ign")).toContain("RenamedIGN");
+  expect(await run("!ign exampleign")).toBe("Your default Minecraft IGN is now `ExampleIGN`.");
+  expect(await run("!ign")).toContain("ExampleIGN");
 
   // The preference persists independently of command instances.
   handler.oldcommands.set("networth", new NetworthCommand({ app: { minecraft } }));
   const own = await run("!nw  ");
-  expect(own.embeds[0].author.name).toBe("RenamedIGN's networth");
+  expect(own.embeds[0].author.name).toBe("ExampleIGN's networth");
   expect(own.embeds[0].description).toContain("$42");
   const other = await run("!nw   OtherPlayer");
   expect(other.embeds[0].author.name).toBe("OtherPlayer's networth");
@@ -120,12 +116,22 @@ it("renders the saved player's slot and honors explicit player and profile synta
   mockProfiles();
   await run("!ign ExampleIGN");
   const own = await run("!render 3");
-  expect(own.embeds[0].author.name).toBe("RenamedIGN");
+  expect(own.embeds[0].author.name).toBe("ExampleIGN");
 
   const ownProfile = await run("!render --me Mango 3");
-  expect(ownProfile.embeds[0].author.name).toBe("RenamedIGN");
+  expect(ownProfile.embeds[0].author.name).toBe("ExampleIGN");
   expect(ownProfile.embeds[0].description).toContain("does not have an item in slot 3");
   const other = await run("!render OtherPlayer Mango 3");
   expect(other.embeds[0].author.name).toBe("OtherPlayer");
   expect(other.embeds[0].description).toContain("does not have an item in slot 3");
+});
+
+it("uses the verified account when the saved UUID no longer resolves", async () => {
+  mockProfiles();
+  fs.mkdirSync("data/command-igns", { recursive: true });
+  fs.writeFileSync(`data/command-igns/${callerId}`, "unresolvable-uuid");
+  fs.writeFileSync("data/linked.json", JSON.stringify({ [callerId]: otherUuid }));
+
+  const lookup = await run("!nw");
+  expect(lookup.embeds[0].author.name).toBe("OtherPlayer's networth");
 });
