@@ -1,0 +1,60 @@
+name: auto-approve-gate
+
+# Fork pull requests from outside contributors leave their workflow runs in
+# "action_required" until a maintainer clicks "Approve and run workflows".
+# This workflow is triggered by `pull_request_target`, so GitHub runs it from
+# the base branch without approval (the base branch is trusted), and it then
+# approves the pending runs for the pull request head commit.
+#
+# Security: nothing from the pull request head is checked out, required or
+# executed here. Only the author login and head sha from the event payload are
+# read, and only that single commit's runs are approved. The approved gate still
+# runs with a read-only token and no repository secrets.
+#
+# To let another contributor run their gate without a click, add their GitHub
+# login to the list in the `if:` below (case-sensitive).
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: auto-approve-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  approve:
+    name: approve
+    if: contains(fromJSON('["Zenvired"]'), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: approve pending runs for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # The gate run for this commit is created right around this event, so
+          # poll briefly instead of assuming it already exists.
+          for attempt in $(seq 1 24); do
+            IDS=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&per_page=100" \
+              --jq '.workflow_runs[] | select(.status == "action_required") | .id' || true)
+            if [ -z "$IDS" ]; then
+              sleep 5
+              continue
+            fi
+            for ID in $IDS; do
+              gh api -X POST "repos/$REPO/actions/runs/$ID/approve" >/dev/null
+              echo "approved run $ID for PR #$PR (${SHA:0:7})"
+            done
+            exit 0
+          done
+          echo "::warning::no action_required run appeared for $SHA within two minutes"
