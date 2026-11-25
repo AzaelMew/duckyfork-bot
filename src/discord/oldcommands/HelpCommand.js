@@ -3,6 +3,11 @@ const DiscordCommand = require('../../contracts/DiscordCommand')
 const config = require("../../../config.json");
 const fs = require('fs');
 
+// Image attached to the help embeds (config.paths.helpImage, "" = none).
+function helpFiles() {
+  return config.paths.helpImage ? [config.paths.helpImage] : [];
+}
+
 function splitArrayThreeWays(arr) {
   const len = arr.length;
   const partSize1 = Math.ceil(len / 4);
@@ -84,7 +89,7 @@ class HelpCommand extends DiscordCommand {
           },
           timestamp: new Date()
         }], 
-        files: ["/tempest/TEMPEST_-_BRIDGE_2022.png"]
+        files: helpFiles()
       })
     }
     else if (user.toLowerCase()=="discord"){
@@ -116,7 +121,7 @@ class HelpCommand extends DiscordCommand {
           },
           timestamp: new Date()
         }], 
-        files: ["/tempest/TEMPEST_-_BRIDGE_2022.png"]
+        files: helpFiles()
       })
     }
     else if(user.toLowerCase()=="minecraft"){
@@ -156,7 +161,7 @@ class HelpCommand extends DiscordCommand {
           },
           timestamp: new Date()
         }], 
-        files: ["/tempest/TEMPEST_-_BRIDGE_2022.png"]
+        files: helpFiles()
       })
     }
     return
@@ -192,7 +197,7 @@ class HelpCommand extends DiscordCommand {
         },
         timestamp: new Date()
       }], 
-      files: ["/tempest/TEMPEST_-_BRIDGE_2022.png"]
+      files: helpFiles()
     }) */
   }
 }

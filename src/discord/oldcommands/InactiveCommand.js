@@ -1,42 +1,24 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
 
 const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 const axios = require("axios");
 let kickables = []
 
 function toMilli(days){
   return days * 86400000;
 };
-async function getUUIDFromUsername(username) {
-    if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
-        return "Error"
-    }
-    else {
-        try {
-            const { data } = await axios.get('https://api.mojang.com/users/profiles/minecraft/' + username)
-            let uuid = data.id
-            let user = username
-            return uuid
-        } catch {
-            const { data } = await axios.get('https://api.ashcon.app/mojang/v2/user/' + username)
-            let uuid = data.uuid.replace("-","");
-            let user = username
-            return uuid
-        }
-
-    }
-}
-async function getGMemberFromUUID(uuid, message) {
+async function getGMembers(message) {
   try {
     // Fetch guild data and handle errors
-    const { data } = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&player=${uuid}`);
+    const { data } = await axios.get(guildConfig.ownGuildUrl());
 
     if (!data.guild) {
       console.log("Guild data not found.");
       return;
     }
 
-    if (data.guild.name_lower !== "tempestsky") {
+    if (!guildConfig.isOwnGuild(data.guild)) {
       console.log("This player is not in our guild.");
       return;
     }
@@ -69,17 +51,17 @@ async function getActivity(uuid, message, rank) {
     const { data } = await axios.get(`https://api.hypixel.net/v2/player?uuid=${uuid}&key=${config.minecraft.API.hypixelAPIkey}`);
     let lastLogin = data.player.lastLogin;
 
-    if (data.player.displayname === "Rioiyo" || data.player.displayname === "YesPleases" || data.player.displayname === "zabbir" || data.player.displayname === "Frindlo" || data.player.displayname === "Nico_the_Creator" || data.player.displayname === "WhenCarrot" || data.player.displayname === "Legendaryspirits" || data.player.displayname === "MistyTM" || data.player.displayname === "Meir231" || data.player.displayname === "Azael_Nya" || data.player.displayname === "Vallekoen") {
+    if (guildConfig.isKickExempt(data.player.displayname)) {
       console.log(`${data.player.displayname} is excluded from being kicked.`);
       return;
     }
 
-    if (rank === "Elder" || rank === "Guild Master") {
+    if (guildConfig.isProtectedRank(rank)) {
       console.log(`${data.player.displayname} has a privileged rank and will not be kicked.`);
       return;
     }
 
-    if (new Date().getTime() - lastLogin > toMilli(25)) {
+    if (new Date().getTime() - lastLogin > toMilli(config.guild.inactiveKick.days)) {
       kickables.push(data.player.displayname);
       console.log(`${data.player.displayname} will be kicked due to inactivity.`);
       console.log("Kickables:", kickables);
@@ -93,9 +75,6 @@ async function getActivity(uuid, message, rank) {
     return [];
   }
 };
-async function getGMemberFromUsername(username, message) {
-  return await getGMemberFromUUID(await getUUIDFromUsername(username), message)
-};
 class InactiveCommand extends DiscordCommand {
   constructor(discord) {
     super(discord)
@@ -108,12 +87,12 @@ class InactiveCommand extends DiscordCommand {
   onCommand(message) {
     let args = message.content.trim().split(/\s+/);
 
-    if (args.length < 2 || args[1].toLowerCase() !== 'sky') {
+    if (!guildConfig.matchKeyword(args).forUs) {
       return;
     }
 
     kickables = []
-    getGMemberFromUsername("xephor_ex", message).then(kickabes => {
+    getGMembers(message).then(kickabes => {
       let interval = 750; // how much time should the delay between two iterations be (in milliseconds)?
       for (let index = 0; index < (kickables).length; ++index) {
         let el = kickables[index]

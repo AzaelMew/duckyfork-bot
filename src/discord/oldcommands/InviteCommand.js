@@ -1,26 +1,28 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
 
 const config = require("../../../config.json");
-const fs = require('fs');
+const guildConfig = require("../../contracts/guildConfig.js");
 const axios = require("axios");
 let user = null
 
 
-async function compareGuilds(){
+// Sky and Aria share one Discord server: an !invite without a keyword goes to
+// whichever of the two guilds has fewer members (config.guild.invite). With no
+// peerGuildId configured the bot always invites.
+async function shouldInvite(){
+  const invite = config.guild.invite;
+  if (!invite.guildId || !invite.peerGuildId) {
+    return true
+  }
   try {
-    const sky = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&id=5efdacc58ea8c97b066144a7`);
-    const aria = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&id=6627e4128ea8c9d0525e27fa`);
-    let skyMembers = sky.data.guild.members.length;
-    let ariaMembers = aria.data.guild.members.length;
-    skyMembers <= ariaMembers
-    if (skyMembers <= ariaMembers){
-      return "Tsky"
-    } else {
-      return "Taria"
-    }
+    const own = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&id=${invite.guildId}`);
+    const peer = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&id=${invite.peerGuildId}`);
+    const ownMembers = own.data.guild.members.length;
+    const peerMembers = peer.data.guild.members.length;
+    return ownMembers < peerMembers || (ownMembers === peerMembers && invite.winsTie === true)
   } catch (error) {
     console.error('Error fetching guild data:', error.message);
-    return 0;
+    return false;
   }
 }
 class InviteCommand extends DiscordCommand {
@@ -36,21 +38,21 @@ class InviteCommand extends DiscordCommand {
   onCommand(message) {
     let args = message.content.trim().split(/\s+/);
 
-    if (args.length < 2 || args[1].toLowerCase() == 'aria') {
+    if (args.length < 2) {
       return;
     }
-    if (args[1].toLowerCase() == 'sky'){
-      user = args[2]
+    const target = guildConfig.matchKeyword(args);
+    if (target.keyword && !target.forUs) {
+      return;
+    }
+    if (target.keyword){
+      user = target.rest[0]
       this.sendMinecraftMessage(`/g invite ${user ? user : ''}`)
     } else {
       user = args[1]
-      compareGuilds().then((members) => {
-        if (members == "Tsky"){
+      shouldInvite().then((invite) => {
+        if (invite){
           this.sendMinecraftMessage(`/g invite ${user ? user : ''}`)
-        } else if (members == "Taria"){
-          return
-        } else {
-          console.log("something broke")
         }
       });
     }

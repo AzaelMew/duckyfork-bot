@@ -18,7 +18,15 @@
  *     [--image-compression true|false] [--retry-on-rate-limit true|false] \
  *     [--peer-rank-rank VIP+] [--peer-rank-guild-rank Elder] \
  *     [--stats-proxy-url http://STATS_PROXY_HOST:3000] \
- *     [--secrets-file /path/to/secrets.json] [--force]
+ *     [--secrets-file /path/to/secrets.json] \
+ *     [--guild-file /path/to/guild.json] [--guild-data-path <path>] \
+ *     [--help-image <path>] [--force]
+ *
+ * --guild-file is a JSON file holding the whole `guild` section (guild name,
+ * Discord keyword, rank ladder, kick-exempt players, schedules; see
+ * docs/config.md). It replaces a missing `guild` section, or one whose name
+ * is still the GUILD_NAME placeholder; an existing real section is kept unless
+ * --force is given.
  *
  * --secrets-file is a JSON object that maps dotted config key paths to values:
  *   {"minecraft.API.waifuItKey": "...", "minecraft.API.statsProxyKey": "..."}
@@ -56,7 +64,8 @@ const USAGE = `Usage:
     [--image-compression true|false] [--retry-on-rate-limit true|false] \\
     [--peer-discord-relay true|false] \\
     [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] \\
-    [--stats-proxy-url <http://host:port>] [--secrets-file <path.json>] [--force]
+    [--stats-proxy-url <http://host:port>] [--secrets-file <path.json>] \\
+    [--guild-file <guild.json>] [--guild-data-path <path>] [--help-image <path>] [--force]
 
 --secrets-file takes a JSON object of dotted key paths to values, so API keys
 never appear in argv or shell history:
@@ -81,6 +90,9 @@ const FLAGS = {
   "--peer-rank-guild-rank": "peerRankGuildRank",
   "--stats-proxy-url": "statsProxyUrl",
   "--secrets-file": "secretsFile",
+  "--guild-file": "guildFile",
+  "--guild-data-path": "guildDataPath",
+  "--help-image": "helpImage",
 };
 
 const FLAG_NAMES = Object.fromEntries(Object.entries(FLAGS).map(([flag, key]) => [key, flag]));
@@ -289,6 +301,8 @@ function buildManagedKeys(options, example, secrets) {
       origin(options.peerDiscordRelay),
     ],
     ["paths.blacklist", supplied(options.blacklistPath, example.paths.blacklist), origin(options.blacklistPath)],
+    ["paths.guildData", supplied(options.guildDataPath, example.paths.guildData), origin(options.guildDataPath)],
+    ["paths.helpImage", supplied(options.helpImage, example.paths.helpImage), origin(options.helpImage)],
     [
       "discord.commands.enabled",
       options.commandsEnabled === undefined ? example.discord.commands.enabled : commandsValue(options.commandsEnabled),
@@ -362,6 +376,25 @@ function main() {
       report.defaults.push(keyPath);
     }
     setPath(config, keyPath, value);
+  }
+
+  if (options.guildFile !== undefined) {
+    const guild = readJsonFile(options.guildFile, "guild");
+    if (guild === null || typeof guild !== "object" || Array.isArray(guild)) {
+      fail("--guild-file must contain the guild section as a JSON object");
+    }
+    const existing = getPath(config, "guild");
+    const placeholder = existing.found && getPath(config, "guild.name").value === example.guild.name;
+    if (existing.found && !options.force && !placeholder) {
+      report.kept.push("guild");
+      if (!sameValue(existing.value, guild)) report.differs.push("guild");
+    } else {
+      (existing.found ? report.replaced : report.added).push("guild");
+      if (placeholder) report.replacedPlaceholders.push("guild");
+      config.guild = guild;
+    }
+  } else if (!getPath(config, "guild").found) {
+    console.log("note  guild: not in the config and no --guild-file given; the bot will boot with the GUILD_NAME placeholder");
   }
 
   fs.writeFileSync(outputPath, JSON.stringify(config, null, 2));

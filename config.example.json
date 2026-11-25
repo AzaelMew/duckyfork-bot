@@ -126,7 +126,43 @@
     "peerDiscordRelay": true
   },
   "paths": {
-    "blacklist": "./data/blacklist.txt"
+    "blacklist": "./data/blacklist.txt",
+    "guildData": "./data/guildData.json",
+    "helpImage": ""
+  },
+  "guild": {
+    "name": "GUILD_NAME",
+    "alliedGuilds": [],
+    "commandKeyword": "",
+    "peerCommandKeywords": [],
+    "requireKeyword": false,
+    "invite": {
+      "guildId": "",
+      "peerGuildId": "",
+      "winsTie": true
+    },
+    "ranks": {
+      "levelsFile": "",
+      "ladder": [
+        {
+          "name": "Member",
+          "level": 0
+        }
+      ],
+      "protected": ["Guild Master"],
+      "overrides": {}
+    },
+    "kickExempt": [],
+    "protectedPlayers": [],
+    "autoClaim": {
+      "enabled": false,
+      "cron": "0 17 * * *"
+    },
+    "inactiveKick": {
+      "enabled": false,
+      "cron": "30 17 * * *",
+      "days": 25
+    }
   },
   "verification": {
     "enabled": false,

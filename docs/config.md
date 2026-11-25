@@ -1,7 +1,7 @@
 # config.json
 
-One codebase runs both bots; everything that differs between Sky and Aria is in
-`config.json`. `config.json` is gitignored and never leaves the host. The
+One codebase runs every bot (Sky, Aria, Shana); everything that differs between
+them is in `config.json`. `config.json` is gitignored and never leaves the host. The
 template is `config.example.json` and `scripts/check-config.js` validates a real
 file against it.
 
@@ -95,10 +95,69 @@ or empty.
 | key | meaning |
 |---|---|
 | `paths.blacklist` | Path of the UUID blacklist file, absolute or relative to the bot's working directory. Read by `ChatHandler` (guild requirements) and the blacklist/kick commands; written by the blacklist and kick commands |
+| `paths.guildData` | Where the online/list commands write the guild member dump (`guildData.json`) |
+| `paths.helpImage` | Image attached to the Discord `!help` embeds; `""` attaches nothing |
 
-Other absolute host paths (`level.json`, `guildData.json`, the HelpCommand
-image in the host's `tempest` directory) are still literals in the code and are
-not configurable yet.
+## guild
+
+Everything that ties a bot to its Hypixel guild. Read through
+`src/contracts/guildConfig.js`; no command carries a guild name, rank name or
+player name of its own.
+
+| key | meaning |
+|---|---|
+| `guild.name` | The Hypixel guild name (`/g info`). Guild API lookups are made by this name and every "is this our guild" check compares against it, case-insensitively |
+| `guild.alliedGuilds` | Extra guild names `!member` accepts (Sky: `TempestAria`) |
+| `guild.commandKeyword` | Word that addresses this bot in `!override`, `!autoclaim`, `!autokick`, `!kickinactive` and `!invite` when several bots read one Discord server (`!override sky g list`) |
+| `guild.peerCommandKeywords` | Keywords of the other bots in the same server; a command naming one of them is ignored |
+| `guild.requireKeyword` | `true`: those commands do nothing without this bot's keyword (Sky, Aria). `false`: the keyword is optional (a bot alone in its server) |
+| `guild.invite.guildId` / `peerGuildId` | Hypixel guild ids for `!invite <ign>` without a keyword: the bot whose guild has fewer members invites. Empty `peerGuildId` = always invite |
+| `guild.invite.winsTie` | Which bot invites when both guilds have the same member count (Sky `true`, Aria `false`) |
+| `guild.ranks.ladder` | Ranks from highest to lowest, `{ "name": "Legend", "level": 300 }` (SkyBlock level). The last rank is the default and its level is the guild requirement (`!autokick`, `!reqs`) |
+| `guild.ranks.levelsFile` | Optional JSON file `{ "<lowercased rank>": level }` that overrides the ladder levels; read on every use, so editing it needs no restart. `""` = use the ladder levels |
+| `guild.ranks.protected` | Staff ranks the claim and kick jobs never touch; also listed first by the online/list commands |
+| `guild.ranks.overrides` | `{ "<uuid without dashes>": "<rank>" }` fixed `!claim` results |
+| `guild.kickExempt` | IGNs (exact case) the inactivity and requirement kicks skip |
+| `guild.protectedPlayers` | IGNs (any case) Discord `!kick` refuses |
+| `guild.autoClaim.enabled` / `cron` | Daily rank sync (`/g setrank`) for every member, host local time |
+| `guild.inactiveKick.enabled` / `cron` / `days` | Daily kick of members offline for more than `days` days |
+
+`guild` is a nested section with lists, so `migrate-config.js` takes it as a
+file instead of flags: write the section to a JSON file (it holds player names,
+no secrets) and pass `--guild-file guild.json`. It is added when missing or
+still named `GUILD_NAME`, and kept otherwise unless `--force` is given.
+`--guild-data-path` and `--help-image` set the two new `paths` keys.
+
+`check-config.js` warns while `guild.name` is the `GUILD_NAME` placeholder and
+fails on an empty ladder or a ladder rank without a name. A bot that boots with
+the placeholder finds no guild, so every guild command quietly does nothing.
+
+### Values per bot
+
+```jsonc
+// Sky
+"guild": {
+  "name": "TempestSky", "alliedGuilds": ["TempestAria"],
+  "commandKeyword": "sky", "peerCommandKeywords": ["aria"], "requireKeyword": true,
+  "invite": { "guildId": "<TempestSky id>", "peerGuildId": "<TempestAria id>", "winsTie": true },
+  "ranks": {
+    "levelsFile": "<host level.json>",
+    "ladder": [{ "name": "Legend" }, { "name": "Champion" }, { "name": "Knight" }, { "name": "Recruit" }],
+    "protected": ["Guild Master", "Elder"],
+    "overrides": { "<uuid>": "Champion" }
+  },
+  "kickExempt": ["<igns>"], "protectedPlayers": ["<owner ign>"],
+  "autoClaim": { "enabled": true, "cron": "00 17 * * *" },
+  "inactiveKick": { "enabled": false, "cron": "30 17 * * *", "days": 25 }
+}
+// Aria: name TempestAria, alliedGuilds [], keyword "aria", peers ["sky"],
+//   invite ids swapped with winsTie false, autoClaim.enabled false (its old
+//   job looked the guild up through a TempestSky member and never matched).
+// Shana: name Bakacord, keyword "sky" (what its server types), peers [],
+//   requireKeyword false, no invite ids, ladder Master 400 / Expert 300 /
+//   Challenger 180 / Beginner 0, protected ["Guild Master", "Baka"],
+//   autoClaim at "00 20 * * *".
+```
 
 ## minecraft.API
 
