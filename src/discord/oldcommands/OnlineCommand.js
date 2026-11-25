@@ -3,6 +3,8 @@ const DiscordCommand = require('../../contracts/DiscordCommand')
 const { Embed } = require("../../contracts/embedHandler.js");
 const bridge = require("../../contracts/bridge.js")
 const fs = require('fs');
+const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 const Canvas = require('canvas');
 const imgur = require('imgur-anonymous-uploader');
 const uploader = new imgur(require("../../contracts/Imgur/imgurTokens.js").clientId);
@@ -340,8 +342,8 @@ async function renderChat(description, maxLineWidth = 640) {
 }
 
 
-let dataFilePath = "/tempest/guildData.json"
-let predeterminedRanks = ['Guild Master', 'Elder', 'Legend', 'Champion', 'Knight', 'Recruit'];
+let dataFilePath = config.paths.guildData
+let predeterminedRanks = guildConfig.allRankNames();
 
 function writeDataToFile(data) {
   fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf-8');

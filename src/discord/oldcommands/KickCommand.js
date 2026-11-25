@@ -1,6 +1,7 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
 
 const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 const axios = require("axios");
 const fs = require('fs');
 async function getUUIDFromUsername(username) {
@@ -36,12 +37,12 @@ class KickCommand extends DiscordCommand {
     let args = this.getArgs(message)
     let user = args.shift()
     let reason = args.join(' ')
-    if(user.toLowerCase()=="azael_nya") return
+    if(guildConfig.isProtectedPlayer(user)) return
     else{
       
       try {
         const guildInfo = await this.getGuildInfo(user);
-        if (guildInfo && guildInfo.name !== 'TempestSky') {
+        if (guildInfo && !guildConfig.isOwnGuild(guildInfo)) {
           return;
         }
       } catch (error) {

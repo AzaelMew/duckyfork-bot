@@ -3,9 +3,11 @@ const DiscordCommand = require('../../contracts/DiscordCommand')
 const { Embed } = require("../../contracts/embedHandler.js");
 const bridge = require("../../contracts/bridge.js")
 const fs = require('fs');
+const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 
-let dataFilePath = "/tempest/guildData.json"
-let predeterminedRanks = ['Guild Master', 'Elder', 'Legend', 'Champion', 'Knight', 'Recruit'];
+let dataFilePath = config.paths.guildData
+let predeterminedRanks = guildConfig.allRankNames();
 
 function writeDataToFile(data) {
   fs.writeFileSync(dataFilePath, JSON.stringify(data, null, 2), 'utf-8');

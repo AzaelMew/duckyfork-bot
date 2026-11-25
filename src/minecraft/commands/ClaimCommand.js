@@ -1,28 +1,9 @@
 const minecraftCommand = require("../../contracts/minecraftCommand.js");
 const config = require("../../../config.json");
 const axios = require("axios");
-const fs = require('fs');
+const guildConfig = require("../../contracts/guildConfig.js");
 
 let rank
-
-function readOrUpdateNumber(jsonFilePath, role) {
-    // Read the JSON file
-    const jsonData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf-8'));
-  
-    role = role.toLowerCase()
-    // Return the number from the JSON data based on the role
-    if (role === 'legend') {
-        return jsonData.legend;
-    } else if (role === 'champion') {
-        return jsonData.champion;
-    } else if (role === 'knight') {
-        return jsonData.knight;
-    } else if (role === 'recruit') {
-        return jsonData.recruit;
-    } else {
-        throw new Error('Invalid role. Use "Legend", "Champion", "Knight", or "Recruit".');
-    }
-  }
 
 function numberWithCommas(x) {
     x = x.toString().split(".")[0]
@@ -55,10 +36,6 @@ async function getUUIDFromUsername(username) {
     }
 }
 async function getStatsFromUUID(name, profile) {
-    let legend = readOrUpdateNumber('/tempest/level.json' ,"legend");
-    let champion = readOrUpdateNumber('/tempest/level.json' ,"champion");
-    let knight = readOrUpdateNumber('/tempest/level.json' ,"knight");
-
     try {
         if (name == undefined) {
             name = "a"
@@ -66,8 +43,9 @@ async function getStatsFromUUID(name, profile) {
         if (profile == undefined) {
             profile = "b"
         }
-        if (name == "a7cb7319ac7547f0802116f38dc5ca85") {
-            rank = "champ"
+        const override = guildConfig.rankOverride(name)
+        if (override !== undefined) {
+            rank = override
             return rank
         }
         const { data } = await axios.get(`${config.minecraft.API.statsProxyUrl}/v2/profiles/${name}?key=${config.minecraft.API.statsProxyKey}`)
@@ -80,22 +58,8 @@ async function getStatsFromUUID(name, profile) {
             }
         }
         console.log(newlvl)
-        if (newlvl >= legend) {
-            rank = "leg"
-            return rank
-        }
-        else if (newlvl >= champion) {
-            rank = "champ"
-            return rank
-        }
-        else if (newlvl >= knight) {
-            rank = "vet"
-            return rank
-        }
-        else {
-            rank = "ini"
-            return rank
-        }
+        rank = guildConfig.rankForLevel(newlvl)
+        return rank
 
     }
     catch (error) {
@@ -114,30 +78,13 @@ class ClaimCommand extends minecraftCommand {
     async onCommand(username, message) {
         let args = message.split(" ")
         getStatsFromUsername(username, args[1]).then(rank => {
-            if(rank == "leg") {
-                this.warpSend(`/g setrank ${username} Legend`)
-                setTimeout(() => {
-                    this.send(`/gc ${username}'s rank has been set to Legend! If this is wrong, make sure you're on your main profile, and APIs are on!`)
-                }, 1000);
+            if (!guildConfig.rankLadder().some((entry) => entry.name === rank)) {
+                return
             }
-            if (rank == "champ") {
-                this.warpSend(`/g setrank ${username} Champion`)
-                setTimeout(() => {
-                    this.send(`/gc ${username}'s rank has been set to Champion! If this is wrong, make sure you're on your main profile, and APIs are on!`)
-                }, 1000);
-            }
-            if (rank == "vet") {
-                this.warpSend(`/g setrank ${username} Knight`)
-                setTimeout(() => {
-                    this.send(`/gc ${username}'s Your rank has been set to Knight! If this is wrong, make sure you're on your main profile, and APIs are on!`)
-                }, 1000);
-            }
-            if (rank == "ini") {
-                this.warpSend(`/g setrank ${username} Recruit`)
-                setTimeout(() => {
-                    this.send(`/gc ${username}'s rank has been set to Recruit! If this is wrong, make sure you're on your main profile, and APIs are on!`)
-                }, 1000);
-            }
+            this.warpSend(`/g setrank ${username} ${rank}`)
+            setTimeout(() => {
+                this.send(`/gc ${username}'s rank has been set to ${rank}! If this is wrong, make sure you're on your main profile, and APIs are on!`)
+            }, 1000);
         })
     }
 }

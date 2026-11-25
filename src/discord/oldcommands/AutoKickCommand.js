@@ -1,66 +1,24 @@
 const DiscordCommand = require('../../contracts/DiscordCommand');
+const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 const axios = require('axios');
-const fs = require('fs');
 
 let ini = [];
-let adv = [];
-let vet = [];
-let champ = [];
-
-async function getUUIDFromUsername(username) {
-    if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
-        return "Error"
-    }
-    else {
-        try {
-            const { data } = await axios.get('https://api.mojang.com/users/profiles/minecraft/' + username)
-            let uuid = data.id
-            let user = username
-            return uuid
-        } catch {
-            const { data } = await axios.get('https://api.ashcon.app/mojang/v2/user/' + username)
-            let uuid = data.uuid.replace("-","");
-            let user = username
-            return uuid
-        }
-
-    }
-}
 
 async function getUsernameFromUUID(uuid) {
   const { data } = await axios.get('https://sessionserver.mojang.com/session/minecraft/profile/' + uuid);
   return data.name;
 }
 
-function readOrUpdateNumber(jsonFilePath, role) {
-  const jsonData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf-8'));
-  role = role.toLowerCase();
-  if (role === 'legend') {
-    return jsonData.legend;
-  } else if (role === 'champion') {
-    return jsonData.champion;
-  } else if (role === 'knight') {
-    return jsonData.knight;
-  } else if (role === 'recruit') {
-    return jsonData.recruit;
-  } else {
-    throw new Error('Invalid role. Use "Legend", "Champion", "Knight", or "Recruit".');
-  }
-}
-
-async function getGMemberFromUUID(uuid, message) {
+async function getGMembers() {
   try {
-    if (!uuid) {
-      uuid = "a"; // Assign a dummy value if UUID is undefined
-    }
+    const { data } = await axios.get(guildConfig.ownGuildUrl());
 
-    const { data } = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&player=${uuid}`);
-
-    if (!data.guild || data.guild.name_lower !== "tempestsky") {
+    if (!data.guild || !guildConfig.isOwnGuild(data.guild)) {
       return "This player is not in our guild.";
     }
 
-    let currentNumber = readOrUpdateNumber('/tempest/level.json', "recruit") * 100;
+    let currentNumber = guildConfig.minimumLevel() * 100;
 
     for (let i = 0; i < data.guild.members.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 150));
@@ -81,13 +39,12 @@ async function getActivity(uuid, rank, min) {
     const { data } = await axios.get(`https://api.hypixel.net/v2/skyblock/profiles?key=${config.minecraft.API.hypixelAPIkey}&uuid=${uuid}`);
     let name = await getUsernameFromUUID(uuid);
 
-    const exemptPlayers = ["Rioiyo", "YesPleases", "zabbir", "Frindlo", "Nico_the_Creator", "WhenCarrot", "Legendaryspirits", "MistyTM", "Meir231", "Azael_Nya", "Vallekoen"];
-    if (exemptPlayers.includes(name)) {
+    if (guildConfig.isKickExempt(name)) {
       console.log(`${name} is excluded from being kicked.`);
       return;
     }
 
-    if (rank === "Elder" || rank === "Guild Master") {
+    if (guildConfig.isProtectedRank(rank)) {
       console.log(`${name} has a privileged rank and will not be kicked.`);
       return;
     }
@@ -113,11 +70,6 @@ async function getActivity(uuid, rank, min) {
   }
 }
 
-async function getGMemberFromUsername(username, message) {
-  const uuid = await getUUIDFromUsername(username);
-  return await getGMemberFromUUID(uuid, message);
-}
-
 class AutoKickCommand extends DiscordCommand {
   constructor(discord) {
     super(discord)
@@ -129,7 +81,7 @@ class AutoKickCommand extends DiscordCommand {
   async onCommand(message) {
     let args = message.content.trim().split(/\s+/);
 
-    if (args.length < 2 || args[1].toLowerCase() !== 'sky') {
+    if (!guildConfig.matchKeyword(args).forUs) {
       return;
     }
 
@@ -141,7 +93,8 @@ class AutoKickCommand extends DiscordCommand {
     });
 
     console.log("Fetching guild members...");
-    await getGMemberFromUsername("xephor_ex", message);
+    ini = [];
+    await getGMembers();
     console.log("Members to be kicked:", ini);
 
     let interval = 750; // Delay between each kick in milliseconds

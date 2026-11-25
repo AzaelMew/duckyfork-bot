@@ -143,6 +143,10 @@ const REQUIRED_KEYS = [
   ["features.retryOnRateLimit", "boolean", "retry a guild line when Hypixel rate-limits it"],
   ["features.imageCompression", "boolean", "compress Discord images with sharp before upload"],
   ["features.peerDiscordRelay", "boolean", "post peer-bot messages into this bot's Discord channels"],
+  ["paths.guildData", "string", "where the online/list commands write the guild member dump"],
+  ["guild.name", "string", "this bot's Hypixel guild name, e.g. the one shown by /g info"],
+  ["guild.autoClaim.cron", "string", "cron schedule of the daily auto-claim job"],
+  ["guild.inactiveKick.cron", "string", "cron schedule of the inactivity kick job"],
 ];
 
 const PLACEHOLDERS = {
@@ -154,6 +158,7 @@ const PLACEHOLDERS = {
   "minecraft.API.waifuItKey": ["WAIFU_IT_API_KEY"],
   "minecraft.API.statsProxyUrl": ["STATS_PROXY_HOST"],
   "minecraft.API.statsProxyKey": ["STATS_PROXY_KEY"],
+  "guild.name": ["GUILD_NAME"],
 };
 
 function readPath(object, keyPath) {
@@ -202,6 +207,20 @@ function checkRequiredKeys(config) {
     } else if (enabled.value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
       problems.push("discord.commands.enabled: every entry must be a non-empty string");
     }
+  }
+
+  // The rank ladder drives !claim, !reqs, auto-claim and auto-kick: at least
+  // one rung, each with a name (the level may come from guild.ranks.levelsFile).
+  const ladder = readPath(config, "guild.ranks.ladder");
+  if (ladder.found && Array.isArray(ladder.value)) {
+    if (ladder.value.length === 0) {
+      problems.push("guild.ranks.ladder: needs at least one rank (highest first; the last one is the default rank)");
+    }
+    ladder.value.forEach((entry, index) => {
+      if (!isPlainObject(entry) || typeof entry.name !== "string" || entry.name.trim().length === 0) {
+        problems.push(`guild.ranks.ladder[${index}]: needs a non-empty name`);
+      }
+    });
   }
 
   const peerUrl = readPath(config, "bridge.peerUrl");

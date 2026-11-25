@@ -1,6 +1,6 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
 
-const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 
 class OverrideCommand extends DiscordCommand {
   constructor(discord) {
@@ -13,13 +13,13 @@ class OverrideCommand extends DiscordCommand {
 
   onCommand(message) {
     let args = message.content.trim().split(/\s+/);
-    if (args.length < 2 || args[1].toLowerCase() !== 'sky') {
+    const target = guildConfig.matchKeyword(args);
+    if (!target.forUs) {
       return;
     }
-    
-    // Remove the command and the keyword 'aria'
-    args.shift(); // Remove the command part
-    args.shift(); // Remove the 'aria' part
+
+    // Everything after the command and this bot's keyword
+    args = target.rest;
     if (args.length == 0) {
       return message.reply(`No command specified`);
     }
@@ -28,7 +28,7 @@ class OverrideCommand extends DiscordCommand {
 
     this.sendPromoteMessage(`/${command}`);
 
-    message.reply(`\`/${command}\` has been executed in TempestSky`);
+    message.reply(`\`/${command}\` has been executed in ${guildConfig.guildName()}`);
 }
 }
 

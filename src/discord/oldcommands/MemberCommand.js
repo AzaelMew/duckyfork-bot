@@ -1,6 +1,7 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
 
 const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 const axios = require("axios");
 async function getUUIDFromUsername(username) {
     if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
@@ -28,7 +29,7 @@ async function getGMemberFromUUID(uuid) {
     }
     const { data } = await axios.get(`https://api.hypixel.net/v2/guild?key=${config.minecraft.API.hypixelAPIkey}&player=` + uuid)
     try {
-      if (data.guild.name_lower != "tempestsky" && data.guild.name_lower != "tempestaria") {
+      if (!guildConfig.isMemberGuild(data.guild)) {
         let ret = "This player is not in our guild."
         return ret
       }
@@ -37,7 +38,7 @@ async function getGMemberFromUUID(uuid) {
       let ret = "Please confirm the name of the player you're trying to look up."
       return ret
     }
-    if (data.guild.name_lower != "tempestsky" && data.guild.name_lower != "tempestaria") {
+    if (!guildConfig.isMemberGuild(data.guild)) {
       let ret = "This player is not in our guild."
       return ret
     }
