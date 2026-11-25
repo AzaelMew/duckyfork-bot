@@ -290,8 +290,8 @@ function buildManagedKeys(options, example, secrets) {
   const entries = [
     ["bridge.enabled", supplied(options.bridgeEnabled, example.bridge.enabled), origin(options.bridgeEnabled)],
     ["bridge.name", options.name, "supplied"],
-    ["bridge.peerUrl", peerValue(options.peerUrl), origin(options.peerUrl)],
-    ["bridge.peerGuild", peerValue(options.peerGuild), origin(options.peerGuild)],
+    ["bridge.peerUrl", peerValue(options.peerUrl), standalone ? "supplied" : origin(options.peerUrl)],
+    ["bridge.peerGuild", peerValue(options.peerGuild), standalone ? "supplied" : origin(options.peerGuild)],
     ["bridge.mirrorOnSend", supplied(options.mirrorOnSend, example.bridge.mirrorOnSend), origin(options.mirrorOnSend)],
     [
       "bridge.relayBangCommands",

@@ -104,8 +104,12 @@ function checkNode(schema, actual, keyPath, hasKey) {
   }
 }
 
+// Maps keyed by free-form ids (a player UUID): their keys are data, not schema.
+const FREE_FORM_MAPS = ["guild.ranks.overrides"];
+
 function collectExtraKeys(schema, actual, keyPath) {
   if (!isPlainObject(schema) || !isPlainObject(actual)) return;
+  if (FREE_FORM_MAPS.includes(keyPath)) return;
   for (const key of Object.keys(actual)) {
     const childPath = keyPath ? `${keyPath}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(schema, key)) {
