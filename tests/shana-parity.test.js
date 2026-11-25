@@ -193,3 +193,24 @@ describe("ported Shana commands", () => {
     expect(new SlayerCommand({}).aliases).toEqual(["slayers"]);
   });
 });
+
+describe("web.enabled", () => {
+  function initialize(enabled) {
+    const config = standaloneConfig();
+    config.web.enabled = enabled;
+    reload(config);
+    const ExpressManager = require("../src/express/ExpressManager.js");
+    const manager = new ExpressManager({ minecraft: {} });
+    manager.express.listen = jest.fn();
+    manager.initialize();
+    return manager.express.listen;
+  }
+
+  it("does not open the API port when web.enabled is false", () => {
+    expect(initialize(false)).not.toHaveBeenCalled();
+  });
+
+  it("listens when web.enabled is true", () => {
+    expect(initialize(true)).toHaveBeenCalledTimes(1);
+  });
+});

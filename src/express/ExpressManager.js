@@ -95,6 +95,10 @@ class ExpressManager {
   }
 
   initialize() {
+    // web.enabled false (Shana): no peer bot calls this API, so do not listen.
+    if (config.web.enabled === false) {
+      return
+    }
 
     this.router.post('/kick', this.kick.bind(this))
     this.router.post('/mute', this.mute.bind(this))
