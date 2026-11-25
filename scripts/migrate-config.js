@@ -20,7 +20,11 @@
  *     [--stats-proxy-url http://STATS_PROXY_HOST:3000] \
  *     [--secrets-file /path/to/secrets.json] \
  *     [--guild-file /path/to/guild.json] [--guild-data-path <path>] \
- *     [--help-image <path>] [--force]
+ *     [--help-image <path>] [--bridge-enabled true|false] \
+ *     [--commands-disabled name,name] [--role-sync true|false] [--force]
+ *
+ * --bridge-enabled false is for a bot without a peer bot; --peer-url and
+ * --peer-guild are then optional and default to "".
  *
  * --guild-file is a JSON file holding the whole `guild` section (guild name,
  * Discord keyword, rank ladder, kick-exempt players, schedules; see
@@ -65,7 +69,11 @@ const USAGE = `Usage:
     [--peer-discord-relay true|false] \\
     [--peer-rank-rank <rank>] [--peer-rank-guild-rank <guildRank>] \\
     [--stats-proxy-url <http://host:port>] [--secrets-file <path.json>] \\
-    [--guild-file <guild.json>] [--guild-data-path <path>] [--help-image <path>] [--force]
+    [--guild-file <guild.json>] [--guild-data-path <path>] [--help-image <path>] \\
+    [--bridge-enabled true|false] [--commands-disabled name,name] [--role-sync true|false] [--force]
+
+--name is always required; --peer-url and --peer-guild only when the bridge is
+enabled (the default).
 
 --secrets-file takes a JSON object of dotted key paths to values, so API keys
 never appear in argv or shell history:
@@ -93,6 +101,9 @@ const FLAGS = {
   "--guild-file": "guildFile",
   "--guild-data-path": "guildDataPath",
   "--help-image": "helpImage",
+  "--bridge-enabled": "bridgeEnabled",
+  "--commands-disabled": "commandsDisabled",
+  "--role-sync": "roleSync",
 };
 
 const FLAG_NAMES = Object.fromEntries(Object.entries(FLAGS).map(([flag, key]) => [key, flag]));
@@ -134,7 +145,11 @@ function parseArgs(argv) {
       fail(`${argument} needs a value`);
     }
 
-    if (["mirrorOnSend", "relayBangCommands", "imageCompression", "retryOnRateLimit", "peerDiscordRelay"].includes(key)) {
+    if (
+      ["mirrorOnSend", "relayBangCommands", "imageCompression", "retryOnRateLimit", "peerDiscordRelay", "bridgeEnabled", "roleSync"].includes(
+        key,
+      )
+    ) {
       options[key] = parseBoolean(value, argument);
     } else {
       options[key] = value;
@@ -269,10 +284,14 @@ function buildManagedKeys(options, example, secrets) {
       ? fromSecrets("minecraft.API.statsProxyUrl", example.minecraft.API.statsProxyUrl)
       : { value: options.statsProxyUrl, origin: "supplied" };
 
+  const standalone = options.bridgeEnabled === false;
+  const peerValue = (value) => (value === undefined && standalone ? "" : value);
+
   const entries = [
+    ["bridge.enabled", supplied(options.bridgeEnabled, example.bridge.enabled), origin(options.bridgeEnabled)],
     ["bridge.name", options.name, "supplied"],
-    ["bridge.peerUrl", options.peerUrl, "supplied"],
-    ["bridge.peerGuild", options.peerGuild, "supplied"],
+    ["bridge.peerUrl", peerValue(options.peerUrl), origin(options.peerUrl)],
+    ["bridge.peerGuild", peerValue(options.peerGuild), origin(options.peerGuild)],
     ["bridge.mirrorOnSend", supplied(options.mirrorOnSend, example.bridge.mirrorOnSend), origin(options.mirrorOnSend)],
     [
       "bridge.relayBangCommands",
@@ -299,6 +318,12 @@ function buildManagedKeys(options, example, secrets) {
       "features.peerDiscordRelay",
       supplied(options.peerDiscordRelay, example.features.peerDiscordRelay),
       origin(options.peerDiscordRelay),
+    ],
+    ["features.roleSync", supplied(options.roleSync, example.features.roleSync), origin(options.roleSync)],
+    [
+      "discord.commands.disabled",
+      options.commandsDisabled === undefined ? example.discord.commands.disabled : commandsValue(options.commandsDisabled),
+      origin(options.commandsDisabled),
     ],
     ["paths.blacklist", supplied(options.blacklistPath, example.paths.blacklist), origin(options.blacklistPath)],
     ["paths.guildData", supplied(options.guildDataPath, example.paths.guildData), origin(options.guildDataPath)],
@@ -328,7 +353,8 @@ function main() {
     return;
   }
 
-  for (const key of ["input", "output", "name", "peerUrl", "peerGuild"]) {
+  const requiredFlags = options.bridgeEnabled === false ? ["input", "output", "name"] : ["input", "output", "name", "peerUrl", "peerGuild"];
+  for (const key of requiredFlags) {
     if (options[key] === undefined || String(options[key]).trim().length === 0) {
       fail(`${FLAG_NAMES[key]} is required\n\n${USAGE}`);
     }

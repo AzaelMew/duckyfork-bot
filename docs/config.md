@@ -70,6 +70,7 @@ warning when it sees the placeholder peer host.
 
 | key | meaning |
 |---|---|
+| `bridge.enabled` | `false` for a bot with no peer bot (Shana): `postToPeer` does nothing, the peer keys and `web.token` may be empty, and the online/list commands show only this guild without the `(own/peer)` counts. Default `true` |
 | `bridge.name` | This bot's own name as players see it: `<name> Bridge is Online/Offline`, the ` - <name>` guild-rank suffix, the embed footer, `<player> has joined <name>.` |
 | `bridge.peerUrl` | `http://host:port` of the **other** bot's express server, no path. Every peer request is `peerUrl + /api/...` |
 | `bridge.peerGuild` | Guild name sent in the `guild` field of `POST /api/message`. Both bots send the same string today (`aria`) - it is a constant, not the peer's name |
@@ -80,7 +81,9 @@ warning when it sees the placeholder peer host.
 
 `bridge.name`, `bridge.peerUrl`, `bridge.peerGuild` and `web.token` are required:
 `src/contracts/bridge.js` throws at startup with the key path if one is missing
-or empty.
+or empty. With `bridge.enabled` false only `bridge.name` is
+(`migrate-config.js --bridge-enabled false` then needs no `--peer-url` /
+`--peer-guild`).
 
 ## features
 
@@ -88,6 +91,7 @@ or empty.
 |---|---|
 | `features.retryOnRateLimit` | `true`: the `minecraftCommand.send` listener retries a guild line when Hypixel answers `You are sending commands too fast!` or `You cannot say the same message twice!` (up to 5 attempts, 250 ms apart). `false`: no listener, the line is sent once |
 | `features.imageCompression` | `true`: Discord images are compressed with `sharp` before the Imgur upload. `false`: the original file is uploaded and `sharp` is never loaded (`require("sharp")` is lazy, so a host without it still boots) |
+| `features.roleSync` | `true`: run the verification role sync (`src/discord/other/updateUsers.js`, the `force-update-everyone` slash command) every `verification.autoUpdaterInterval` hours, if `verification.autoUpdater` is also true. Default `false`, so a bot whose config already has `autoUpdater: true` does not start syncing |
 | `features.peerDiscordRelay` | `true`: `POST /api/message` lines are forwarded into this bot's Discord channels. `false`: the message is only posted to Minecraft guild chat, no Discord embed (Aria's old tree passed too few fields for its handler, which returned early) |
 
 ## paths
@@ -182,6 +186,12 @@ Which Discord command modules load.
 | `"*"` | every slash command in `src/discord/commands` and every legacy command in `src/discord/oldcommands` (Sky) |
 | `["kick", "help"]` | only commands with those names, in both families |
 | `["old:kick", "slash:help"]` | the same, restricted to one family. `old:` = legacy `!command` from `src/discord/oldcommands`, `slash:` = Discord slash command from `src/discord/commands` |
+
+`discord.commands.disabled` takes the same name forms and removes commands from
+whatever `enabled` selects, so `"*"` minus a few needs no full list. Sky keeps its
+pre-Shana slash set with
+`["slash:force-update", "slash:force-update-everyone", "slash:force-verify", "slash:online"]`
+(those four came from Shana's tree; Shana leaves the list empty).
 
 The prefixed form exists because the families share names: Aria runs the legacy
 `kick` and has no slash `kick`, and a bare `"kick"` would enable both. Both the

@@ -24,7 +24,7 @@ class minecraftCommand {
   }
 
   send(message, n = 1) {
-    if (bot === undefined && bot._client.chat === undefined) {
+    if (typeof bot === "undefined" || bot?._client?.chat === undefined) {
       return;
     }
     bridge.postToPeer("/api/command", { message: message });
@@ -73,13 +73,13 @@ class minecraftCommand {
     }
   }
   warpSend(message, n = 1) {
-    if (bot === undefined && bot._client.chat === undefined) {
+    if (typeof bot === "undefined" || bot?._client?.chat === undefined) {
       return;
     }
     bot.chat(message);
   }
   eventSend(message, n = 1) {
-    if (bot === undefined && bot._client.chat === undefined) {
+    if (typeof bot === "undefined" || bot?._client?.chat === undefined) {
       return;
     }
     // Sky mirrors event lines to the peer as well; Aria only mirrors from
