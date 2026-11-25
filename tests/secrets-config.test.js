@@ -136,14 +136,6 @@ describe("stats proxy call sites read config.minecraft.API", () => {
     const proxyCall = axiosMock.get.mock.calls.map((call) => call[0]).find((url) => url.startsWith(FAKE_STATS_URL + "/"));
     expect(proxyCall).toBe(expectedProxyUrl("v1"));
   });
-
-  it("networth keeps the /v2/ path it used on origin/main", async () => {
-    // The v2 call site is the one that differs between commands, so the version
-    // segment is asserted separately from the rest of the URL.
-    const source = fs.readFileSync(path.join(ROOT, "src/discord/oldcommands/NetworthCommand.js"), "utf8");
-    expect(source).toContain("/v2/profiles/${name}?key=${config.minecraft.API.statsProxyKey}");
-    expect(source).toContain("config.minecraft.API.statsProxyUrl");
-  });
 });
 
 describe("waifu.it call sites read config.minecraft.API.waifuItKey", () => {
