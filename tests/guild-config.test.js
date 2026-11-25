@@ -98,6 +98,7 @@ function configWith(guild) {
   config.minecraft.API.statsProxyUrl = "http://stats.test:3000";
   config.minecraft.API.statsProxyKey = "test-stats-key";
   config.bridge = {
+    enabled: true,
     name: "Sky",
     peerUrl: "http://peer.test:3001",
     peerGuild: "aria",

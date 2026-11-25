@@ -85,7 +85,7 @@ test("adds every new key, preserves existing values, never touches the input", (
   expect(migrated.bridge.mirrorOnSend).toBe(true);
   expect(migrated.bridge.relayBangCommands).toBe(true);
   expect(migrated.paths.blacklist).toBe("/srv/bot/blacklist.txt");
-  expect(migrated.features).toEqual({ retryOnRateLimit: true, imageCompression: true, peerDiscordRelay: true });
+  expect(migrated.features).toEqual({ retryOnRateLimit: true, imageCompression: true, peerDiscordRelay: true, roleSync: false });
   expect(migrated.discord.commands.enabled).toBe("*");
 
   expect(result.stdout).toContain("added bridge.name");

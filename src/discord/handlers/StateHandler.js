@@ -25,6 +25,13 @@ class StateHandler {
 
     Logger.discordMessage("Guild ready, successfully fetched " + guild.name);
 
+    // Verification role sync (Shana). Off unless features.roleSync is set, so
+    // a bot with verification.autoUpdater true but no role sync keeps its
+    // behaviour.
+    if (config.features.roleSync && config.verification.autoUpdater) {
+      require("../other/updateUsers.js");
+    }
+
 
 
     channel.send({

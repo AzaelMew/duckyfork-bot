@@ -44,6 +44,13 @@ function validate() {
   }
 
   const name = requiredString(bridge.name, "bridge.name");
+
+  // A bot alone in its guild network (Shana) runs with bridge.enabled false:
+  // no peer address or token is needed and postToPeer does nothing.
+  if (bridge.enabled === false) {
+    return { enabled: false, name, peerGuild: "", peerUrl: "", token: "" };
+  }
+
   const peerUrlRaw = requiredString(bridge.peerUrl, "bridge.peerUrl");
   const peerGuild = requiredString(bridge.peerGuild, "bridge.peerGuild");
   const token = requiredString(config.web && config.web.token, "web.token");
@@ -65,6 +72,7 @@ function validate() {
   }
 
   return {
+    enabled: true,
     name,
     peerGuild,
     peerUrl: peerUrlRaw.replace(/\/+$/, ""),
@@ -73,6 +81,12 @@ function validate() {
 }
 
 const settings = validate();
+
+/**
+ * false when config.bridge.enabled is false: this bot has no peer, every
+ * postToPeer call resolves to undefined without a request.
+ */
+const enabled = settings.enabled;
 
 /**
  * The bot's own name, as shown to players ("<name> has joined", "- <name>" rank
@@ -101,6 +115,8 @@ const peerUrl = settings.peerUrl;
  *   this bot down with an unhandled rejection.
  */
 async function postToPeer(path, body) {
+  if (!enabled) return undefined;
+
   if (typeof path !== "string" || path.startsWith("/") === false) {
     console.error("[bridge] postToPeer needs an absolute endpoint path, got:", String(path));
     return undefined;
@@ -120,4 +136,4 @@ async function postToPeer(path, body) {
   }
 }
 
-module.exports = { name, peerGuild, peerUrl, postToPeer };
+module.exports = { enabled, name, peerGuild, peerUrl, postToPeer };

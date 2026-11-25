@@ -78,7 +78,7 @@ const executeCommand = async (bot) => {
 };
 const sortOnline = (online) => {
   // Define the rank order for sorting
-  const rankOrder = ["Guild Master", "Elder", "Legend", "Champion", "Knight", "Recruit"];
+  const rankOrder = guildConfig.allRankNames();
 
   // Sort the `online` array based on the rank order
   const sortedOnline = online
@@ -97,9 +97,12 @@ const sortOnline = (online) => {
 
   return sortedOnline;
 };
+
+const NO_PEER_DATA = { totalMembers: "0", onlineMembers: "0", online: [] };
+
 const deepMergeGuildData = (data1, data2) => {
   // Define the rank hierarchy
-  const rankOrder = ["Guild Master", "Elder", "Legend", "Champion", "Knight", "Recruit"];
+  const rankOrder = guildConfig.allRankNames();
 
   // Combine totalMembers and onlineMembers as numbers
   const totalMembers = (parseInt(data1.totalMembers, 10) || 0) + (parseInt(data2.totalMembers, 10) || 0);
@@ -143,8 +146,10 @@ class GuildList extends DiscordCommand {
 
   async onCommand(cat) {
     let skyData = await executeCommand(bot)
-    const { data } = await bridge.postToPeer("/api/list", { message: "a" })
-    const combinedData = deepMergeGuildData(skyData, data.data)
+    // Without a peer (bridge disabled, or the peer is offline) only this
+    // guild is shown.
+    const peer = await bridge.postToPeer("/api/list", { message: "a" })
+    const combinedData = deepMergeGuildData(skyData, (peer && peer.data && peer.data.data) || NO_PEER_DATA)
     const description = `**Total Members** ${combinedData.totalMembers}\n**Online Members:** ${combinedData.onlineMembers}\n${sortOnline(combinedData.online).join("\n")}`;
     const embed = new Embed("#2ECC71", "Guild List", description);
 

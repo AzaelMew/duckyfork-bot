@@ -104,8 +104,12 @@ function checkNode(schema, actual, keyPath, hasKey) {
   }
 }
 
+// Maps keyed by free-form ids (a player UUID): their keys are data, not schema.
+const FREE_FORM_MAPS = ["guild.ranks.overrides"];
+
 function collectExtraKeys(schema, actual, keyPath) {
   if (!isPlainObject(schema) || !isPlainObject(actual)) return;
+  if (FREE_FORM_MAPS.includes(keyPath)) return;
   for (const key of Object.keys(actual)) {
     const childPath = keyPath ? `${keyPath}.${key}` : key;
     if (!Object.prototype.hasOwnProperty.call(schema, key)) {
@@ -124,6 +128,7 @@ function collectExtraKeys(schema, actual, keyPath) {
 // ---------------------------------------------------------------------------
 
 const REQUIRED_KEYS = [
+  ["bridge.enabled", "boolean", "false for a bot without a peer bot (no mirroring, no peer address needed)"],
   ["bridge.name", "string", "this bot's own name, e.g. the guild-bridge name shown to players"],
   ["bridge.peerUrl", "string", "http://host:port of the other bot, no trailing path"],
   ["bridge.peerGuild", "string", "guild name sent in the /api/message body"],
@@ -143,6 +148,7 @@ const REQUIRED_KEYS = [
   ["features.retryOnRateLimit", "boolean", "retry a guild line when Hypixel rate-limits it"],
   ["features.imageCompression", "boolean", "compress Discord images with sharp before upload"],
   ["features.peerDiscordRelay", "boolean", "post peer-bot messages into this bot's Discord channels"],
+  ["features.roleSync", "boolean", "run the verification role sync every verification.autoUpdaterInterval hours"],
   ["paths.guildData", "string", "where the online/list commands write the guild member dump"],
   ["guild.name", "string", "this bot's Hypixel guild name, e.g. the one shown by /g info"],
   ["guild.autoClaim.cron", "string", "cron schedule of the daily auto-claim job"],
@@ -172,8 +178,22 @@ function readPath(object, keyPath) {
   return { found: true, value: current };
 }
 
+// Only needed when the bot talks to a peer (bridge.enabled true).
+const PEER_KEYS = [
+  "bridge.peerUrl",
+  "bridge.peerGuild",
+  "bridge.mirrorOnSend",
+  "bridge.relayBangCommands",
+  "bridge.peerRank.rank",
+  "bridge.peerRank.guildRank",
+  "web.token",
+];
+
 function checkRequiredKeys(config) {
+  const standalone = readPath(config, "bridge.enabled").value === false;
+
   for (const [keyPath, type, hint] of REQUIRED_KEYS) {
+    if (standalone && PEER_KEYS.includes(keyPath)) continue;
     const { found, value } = readPath(config, keyPath);
 
     if (!found || value === null || value === undefined) {
@@ -223,8 +243,13 @@ function checkRequiredKeys(config) {
     });
   }
 
+  const disabled = readPath(config, "discord.commands.disabled");
+  if (disabled.found && (!Array.isArray(disabled.value) || disabled.value.some((entry) => typeof entry !== "string"))) {
+    problems.push("discord.commands.disabled: expected an array of command names");
+  }
+
   const peerUrl = readPath(config, "bridge.peerUrl");
-  if (peerUrl.found && typeof peerUrl.value === "string" && peerUrl.value.trim().length > 0) {
+  if (!standalone && peerUrl.found && typeof peerUrl.value === "string" && peerUrl.value.trim().length > 0) {
     let parsed;
     try {
       parsed = new URL(peerUrl.value);

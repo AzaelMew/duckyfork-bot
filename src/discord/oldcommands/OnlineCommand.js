@@ -417,7 +417,7 @@ const executeCommand = async (bot) => {
 };
 const sortOnline = (online) => {
   // Define the rank order for sorting
-  const rankOrder = ["Guild Master", "Elder", "Legend", "Champion", "Knight", "Recruit"];
+  const rankOrder = guildConfig.allRankNames();
 
   // Sort the `online` array based on the rank order
   const sortedOnline = online
@@ -437,9 +437,18 @@ const sortOnline = (online) => {
   return sortedOnline;
 };
 
+
+const NO_PEER_DATA = { totalMembers: "0", onlineMembers: "0", online: [] };
+const PEER_FOOTER = "• Numbers inside brackets are Sky/Aria counts";
+
+// "   |   (own/peer)" after a total, only when there is a peer bot.
+function peerCounts(own, peer) {
+  return bridge.enabled ? `   |   (${own}/${peer})` : "";
+}
+
 const deepMergeGuildData = (data1, data2) => {
   // Define the rank hierarchy
-  const rankOrder = ["Guild Master", "Elder", "Legend", "Champion", "Knight", "Recruit"];
+  const rankOrder = guildConfig.allRankNames();
 
   // Combine totalMembers and onlineMembers as numbers
   const totalMembers = (parseInt(data1.totalMembers, 10) || 0) + (parseInt(data2.totalMembers, 10) || 0);
@@ -491,11 +500,13 @@ class GuildList extends DiscordCommand {
 
   async onCommand(cat) {
     let skyData = await executeCommand(bot)
-    const { data } = await bridge.postToPeer("/api/online", { message: "a" })
-    const combinedData = deepMergeGuildData(skyData, data.data)
-    const description = `**Total Members:** ${combinedData.totalMembers}   |   (${combinedData.skyTotalMembers}/${combinedData.ariaTotalMembers})\n**Online Members:** ${combinedData.onlineMembers}   |   (${combinedData.skyOnlineMembers}/${combinedData.ariaOnlineMembers})\n${sortOnline(combinedData.online).join("\n")}`;
+    // Without a peer (bridge disabled, or the peer is offline) only this
+    // guild is shown.
+    const peer = await bridge.postToPeer("/api/online", { message: "a" })
+    const combinedData = deepMergeGuildData(skyData, (peer && peer.data && peer.data.data) || NO_PEER_DATA)
+    const description = `**Total Members:** ${combinedData.totalMembers}${peerCounts(combinedData.skyTotalMembers, combinedData.ariaTotalMembers)}\n**Online Members:** ${combinedData.onlineMembers}${peerCounts(combinedData.skyOnlineMembers, combinedData.ariaOnlineMembers)}\n${sortOnline(combinedData.online).join("\n")}`;
     const embed = new Embed("#2ECC71", "Online Members", description, "• Numbers inside brackets are Sky/Aria counts");
-    const descriptionImg = `${sortOnline(combinedData.online).join("\n")}\n\n**Total Members:** ${combinedData.totalMembers}   |   (${combinedData.skyTotalMembers}/${combinedData.ariaTotalMembers})\n**Online Members:** ${combinedData.onlineMembers}   |   (${combinedData.skyOnlineMembers}/${combinedData.ariaOnlineMembers})`;
+    const descriptionImg = `${sortOnline(combinedData.online).join("\n")}\n\n**Total Members:** ${combinedData.totalMembers}${peerCounts(combinedData.skyTotalMembers, combinedData.ariaTotalMembers)}\n**Online Members:** ${combinedData.onlineMembers}${peerCounts(combinedData.skyOnlineMembers, combinedData.ariaOnlineMembers)}`;
 
     renderChat(descriptionImg).then(async (buffer) => {
       const uploadResponse = await uploader.uploadBuffer(buffer);
@@ -510,9 +521,7 @@ class GuildList extends DiscordCommand {
             url: imageUrl,
           },
           color: 0x2A2A2A,
-          footer: {
-            text: "• Numbers inside brackets are Sky/Aria counts",
-          },
+          ...(bridge.enabled ? { footer: { text: PEER_FOOTER } } : {}),
         }],
       })
     })
