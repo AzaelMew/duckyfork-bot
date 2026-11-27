@@ -27,48 +27,55 @@ class minecraftCommand {
     if (typeof bot === "undefined" || bot?._client?.chat === undefined) {
       return;
     }
-    bridge.postToPeer("/api/command", { message: message });
+    // Only the first attempt mirrors the line to the peer: every retry sends
+    // the same line again, so re-posting it would duplicate it on the peer.
+    if (n === 1) {
+      bridge.postToPeer("/api/command", { message: message });
+    }
 
+    // Keep the bot this line was sent on: a reconnect replaces global.bot, and
+    // the listener and its cleanup timer must stay on the old one.
+    const client = bot;
     let listener;
 
     if (config.features.retryOnRateLimit) {
       listener = async (msg) => {
         if (msg.toString().includes(RATE_LIMIT_MESSAGE) && !msg.toString().includes(":")) {
-          bot.removeListener("message", listener);
+          client.removeListener("message", listener);
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
-            return this.send("/gc Command failed to send message after 5 attempts. Please try again later.");
+            return this.warpSend("/gc Command failed to send message after 5 attempts. Please try again later.");
           }
 
           await delay(250);
 
-          return this.send(message);
+          return this.send(message, n);
         } else if (msg.toString().includes(REPEAT_MESSAGE) === true && msg.toString().includes(":") === false) {
-          bot.removeListener("message", listener);
+          client.removeListener("message", listener);
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
-            return this.send("/gc Command failed to send message after 5 attempts. Please try again later.");
+            return this.warpSend("/gc Command failed to send message after 5 attempts. Please try again later.");
           }
 
           await delay(250);
 
           return this.send(
-            `${message} {${helperFunctions.generateID(config.minecraft.bot.messageRepeatBypassLength)}}`,
-            n + 1,
+            `${message} ${helperFunctions.generateID(config.minecraft.bot.messageRepeatBypassLength)}`,
+            n,
           );
         }
       };
 
-      bot.once("message", listener);
+      client.once("message", listener);
     }
 
-    bot.chat(message);
+    client.chat(message);
 
     if (listener !== undefined) {
       setTimeout(() => {
-        bot.removeListener("message", listener);
+        client.removeListener("message", listener);
       }, 500);
     }
   }

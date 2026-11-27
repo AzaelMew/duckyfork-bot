@@ -148,8 +148,10 @@ describe("features.retryOnRateLimit", () => {
     await listener("You are sending commands too fast! Please slow down.");
 
     expect(bot.removeListener).toHaveBeenCalledWith("message", listener);
-    expect(axios.post).toHaveBeenCalledTimes(2);
-    expect(axios.post.mock.calls[1][1]).toEqual({ message: "/gc hello" });
+    // The retry is the same line, so it is no longer mirrored to the peer:
+    // only the first attempt posts (a retry used to duplicate it there).
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post.mock.calls[0][1]).toEqual({ message: "/gc hello" });
     expect(bot.chat).toHaveBeenLastCalledWith("/gc hello");
   }, 10000);
 
@@ -164,10 +166,10 @@ describe("features.retryOnRateLimit", () => {
 
     await listener("You cannot say the same message twice!");
 
-    expect(axios.post).toHaveBeenCalledTimes(2);
-    // Aria's listener wraps an already-braced generateID() result, so the
-    // suffix really is "{{id}}" - kept as-is rather than "fixed".
-    expect(axios.post.mock.calls[1][1].message).toMatch(/^\/gc hello \{\{[A-Za-z0-9]{24}\}\}$/);
+    // Only the first attempt mirrors to the peer; the retry is local.
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    // generateID() already returns the braces, so the suffix is a single "{id}".
+    expect(bot.chat).toHaveBeenLastCalledWith(expect.stringMatching(/^\/gc hello \{[A-Za-z0-9]{24}\}$/));
   }, 10000);
 });
 
@@ -283,7 +285,7 @@ describe("discord.commands.enabled", () => {
     const { loaded } = load(skyConfig(), "src/discord/CommandHandler.js");
     const handler = new loaded({});
 
-    expect(handler.oldcommands.size).toBe(44);
+    expect(handler.oldcommands.size).toBe(43);
     // The slash registration payload is checked separately below; here just
     // prove the legacy loader is unfiltered.
     expect(handler.oldcommands.has("help")).toBe(true);
@@ -342,7 +344,7 @@ describe("features.imageCompression", () => {
 
   it("skips compression when the flag is off", () => {
     const source = fs.readFileSync(path.join(ROOT, "src/discord/handlers/MessageHandler.js"), "utf8");
-    expect(source).toContain("config.features.imageCompression ? await compressImage(filePath) : null");
+    expect(source).toContain("config.features.imageCompression && buffer.length > COMPRESS_THRESHOLD_BYTES");
     expect(source).not.toMatch(/^const sharp = require/m);
   });
 });

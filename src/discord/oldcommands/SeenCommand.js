@@ -1,61 +1,5 @@
 const DiscordCommand = require('../../contracts/DiscordCommand');
-const config = require("../../../config.json");
-const axios = require("axios");
-
-function timeSince(t1, t2) {
-    let secondsDiff = (t1 - t2) / 1000;
-    let minutesDiff = secondsDiff / 60;
-    let hoursDiff = minutesDiff / 60;
-    let daysDiff = hoursDiff / 24;
-    let yearsDiff = daysDiff / 365.25;
-
-    if (secondsDiff > 60 * Math.floor(minutesDiff))
-        secondsDiff -= 60 * Math.floor(minutesDiff);
-    if (minutesDiff > 60 * Math.floor(hoursDiff))
-        minutesDiff -= 60 * Math.floor(hoursDiff);
-    if (hoursDiff > 24 * Math.floor(daysDiff))
-        hoursDiff -= 24 * Math.floor(daysDiff);
-    if (daysDiff > 365.25 * Math.floor(yearsDiff))
-        daysDiff -= 365.25 * Math.floor(yearsDiff);
-
-    Math.floor(secondsDiff) === 0
-        ? (secondsDiff = "")
-        : (secondsDiff = `${Math.floor(secondsDiff)}s `);
-    Math.floor(minutesDiff) === 0
-        ? (minutesDiff = "")
-        : (minutesDiff = `${Math.floor(minutesDiff)}m `);
-    Math.floor(hoursDiff) === 0
-        ? (hoursDiff = "")
-        : (hoursDiff = `${Math.floor(hoursDiff)}h `);
-    Math.floor(daysDiff) === 0
-        ? (daysDiff = "")
-        : (daysDiff = `${Math.floor(daysDiff)}d `);
-    Math.floor(yearsDiff) === 0
-        ? (yearsDiff = "")
-        : (yearsDiff = `${Math.floor(yearsDiff)}y `);
-
-    return yearsDiff + daysDiff + hoursDiff + minutesDiff + secondsDiff;
-}
-
-async function getUUIDFromUsername(username) {
-    if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
-        return "Error"
-    }
-    else {
-        try {
-            const { data } = await axios.get('https://api.mojang.com/users/profiles/minecraft/' + username)
-            let uuid = data.id
-            let user = username
-            return uuid
-        } catch {
-            const { data } = await axios.get('https://api.ashcon.app/mojang/v2/user/' + username)
-            let uuid = data.uuid.replace("-", "");
-            let user = username
-            return uuid
-        }
-
-    }
-}
+const { SKIPPED_UUID, getUUIDFromUsername, fetchPlayer, describeSeen } = require('../../contracts/commands/playerLookup.js');
 
 // Cache system
 const cache = {}; // { [uuid]: { data, timestamp } }
@@ -66,16 +10,14 @@ async function getSeenFromUUID(uuid) {
         if (!uuid) {
             uuid = "a";
         }
-        if (uuid === "f03695547707486ab2308518f04102f7") return;
+        if (uuid === SKIPPED_UUID) return;
 
         const now = Date.now();
 
         let data;
-        let freshData = false;
 
         try {
-            const response = await axios.get(`https://api.hypixel.net/v2/player?key=${config.minecraft.API.hypixelAPIkey}&uuid=${uuid}`);
-            data = response.data;
+            data = await fetchPlayer(uuid);
 
             if (data.success === false) {
                 console.log(`API failure for UUID ${uuid}, trying to use cached data...`);
@@ -91,7 +33,6 @@ async function getSeenFromUUID(uuid) {
                     data: data,
                     timestamp: now
                 };
-                freshData = true;
             }
         } catch (error) {
             console.log(`Request error for UUID ${uuid}, trying to use cached data...`);
@@ -102,25 +43,10 @@ async function getSeenFromUUID(uuid) {
             }
         }
 
-        return processPlayerData(data);
+        return describeSeen(data.player ?? {}, { format: "discord" });
 
     } catch (error) {
         return "never logged into Hypixel";
-    }
-}
-
-function processPlayerData(data) {
-    if (!data.player || data.player.lastLogout == null) {
-        return "Api is Disabled";
-    } else if (data.player.lastLogin > data.player.lastLogout) {
-        let lastLogin = data.player.lastLogin;
-        let onlineFor = timeSince(Date.now(), lastLogin).toString().trim();
-        return `Has been online for ${onlineFor}`;
-    } else {
-        let lastLogout = data.player.lastLogout;
-        let offlineFor = timeSince(Date.now(), lastLogout).toString().trim();
-        lastLogout = lastLogout.toString().slice(0, -3)
-        return `Has been offline for ${offlineFor}, \nThey last logged out <t:${lastLogout}:F>`
     }
 }
 

@@ -90,7 +90,9 @@ class MinecraftManager extends CommunicationBridge {
     // (it only mirrors from contracts/minecraftCommand.send), so the flag
     // covers both halves of that difference.
     if (config.bridge.mirrorOnSend) {
-      await bridge.postToPeer("/api/command", { message: `${chat} ${message} ${generateID(10)}` })
+      // Fire and forget: postToPeer never throws, and a slow peer must not
+      // delay the local /gc send below.
+      bridge.postToPeer("/api/command", { message: `${chat} ${message} ${generateID(10)}` })
     }
 
     bot.on("message", messageListener);

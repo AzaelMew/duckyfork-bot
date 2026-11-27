@@ -104,6 +104,32 @@ test("is idempotent and keeps values that already exist", () => {
   expect(fs.readFileSync(`${outputPath}.2`, "utf8")).toBe(first);
 });
 
+test("--guild-file carries the in-game admin lists, or defaults them empty", () => {
+  const guild = JSON.parse(fs.readFileSync(path.join(ROOT, "config.example.json"), "utf8")).guild;
+  guild.name = "TempestSky";
+  guild.overridePlayers = ["Admin_One"];
+  guild.blacklistEditors = ["Editor_One", "Editor_Two"];
+  const guildPath = path.join(directory, "guild.json");
+  fs.writeFileSync(guildPath, JSON.stringify(guild));
+
+  const result = run(["--guild-file", guildPath]);
+  expect(result.status).toBe(0);
+  const migrated = JSON.parse(fs.readFileSync(outputPath, "utf8"));
+  expect(migrated.guild.overridePlayers).toEqual(["Admin_One"]);
+  expect(migrated.guild.blacklistEditors).toEqual(["Editor_One", "Editor_Two"]);
+
+  // A guild file from before these keys existed gets the empty (nobody) list.
+  delete guild.overridePlayers;
+  delete guild.blacklistEditors;
+  fs.writeFileSync(guildPath, JSON.stringify(guild));
+  const second = run(["--guild-file", guildPath], { output: `${outputPath}.2` });
+  expect(second.status).toBe(0);
+  expect(second.stdout).toContain("added guild.overridePlayers");
+  const migratedAgain = JSON.parse(fs.readFileSync(`${outputPath}.2`, "utf8"));
+  expect(migratedAgain.guild.overridePlayers).toEqual([]);
+  expect(migratedAgain.guild.blacklistEditors).toEqual([]);
+});
+
 test("--force replaces an existing managed key", () => {
   expect(run().status).toBe(0);
 

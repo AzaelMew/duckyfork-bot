@@ -3,8 +3,6 @@ const DiscordManager = require("./discord/DiscordManager.js");
 const ExpressManager = require('./express/ExpressManager')
 // eslint-disable-next-line no-unused-vars
 const Configuration = require("./Configuration.js");
-// eslint-disable-next-line no-unused-vars
-const Updater = require("./Updater.js");
 
 class Application {
   async register() {

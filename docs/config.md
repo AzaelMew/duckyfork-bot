@@ -123,6 +123,8 @@ player name of its own.
 | `guild.ranks.overrides` | `{ "<uuid without dashes>": "<rank>" }` fixed `!claim` results |
 | `guild.kickExempt` | IGNs (exact case) the inactivity and requirement kicks skip |
 | `guild.protectedPlayers` | IGNs (any case) Discord `!kick` refuses |
+| `guild.overridePlayers` | IGNs (any case) allowed to run the in-game `!override` command, i.e. execute any slash command as the Minecraft bot. An empty or missing list means nobody can. The old build matched the substring `Azael_Nya`, so any name containing it (e.g. `Azael_Nyan`) qualified |
+| `guild.blacklistEditors` | IGNs (any case) allowed to run the in-game `!blacklist` command. An empty or missing list means nobody can |
 | `guild.autoClaim.enabled` / `cron` | Daily rank sync (`/g setrank`) for every member, host local time |
 | `guild.inactiveKick.enabled` / `cron` / `days` | Daily kick of members offline for more than `days` days |
 
@@ -131,6 +133,9 @@ file instead of flags: write the section to a JSON file (it holds player names,
 no secrets) and pass `--guild-file guild.json`. It is added when missing or
 still named `GUILD_NAME`, and kept otherwise unless `--force` is given.
 `--guild-data-path` and `--help-image` set the two new `paths` keys.
+`--guild-file` carries `overridePlayers` and `blacklistEditors` through with the
+rest of the section; a section (or guild file) without them gets `[]`, so
+nobody can run the in-game admin commands until the lists are filled in.
 
 `check-config.js` warns while `guild.name` is the `GUILD_NAME` placeholder and
 fails on an empty ladder or a ladder rank without a name. A bot that boots with
@@ -151,6 +156,8 @@ the placeholder finds no guild, so every guild command quietly does nothing.
     "overrides": { "<uuid>": "Champion" }
   },
   "kickExempt": ["<igns>"], "protectedPlayers": ["<owner ign>"],
+  "overridePlayers": ["Azael_Nyaa", "Azael_Nya"],
+  "blacklistEditors": ["Xephor_EX", "Azael_Nyaa", "Vallekoen"],
   "autoClaim": { "enabled": true, "cron": "00 17 * * *" },
   "inactiveKick": { "enabled": false, "cron": "30 17 * * *", "days": 25 }
 }
@@ -161,6 +168,10 @@ the placeholder finds no guild, so every guild command quietly does nothing.
 //   requireKeyword false, no invite ids, ladder Master 400 / Expert 300 /
 //   Challenger 180 / Beginner 0, protected ["Guild Master", "Baka"],
 //   autoClaim at "00 20 * * *".
+// All three bots keep the same two admin lists:
+//   overridePlayers ["Azael_Nyaa", "Azael_Nya"],
+//   blacklistEditors ["Xephor_EX", "Azael_Nyaa", "Vallekoen"].
+// They are host values, not code: source only carries the helpers.
 ```
 
 ## minecraft.API
@@ -264,8 +275,6 @@ relay is ever turned on.
 - `ExpressManager.message()` answers `"Aria bridge is not online."` on both
   bots. It is a hardcoded string in an HTTP error body; changing it would change
   Sky's output, so it is untouched.
-- `src/minecraft/commands/BlacklistCommand.js` writes a relative `blacklist.txt`
-  on `blacklist remove` instead of `config.paths.blacklist` (pre-existing bug).
 - `src/minecraft/commands/birdCommand.js`: the `bird` command used to be called
   `BirbCommand.js` here and `birdCommand.js` in the Aria tree; the file is
   renamed to `birdCommand.js` so both trees use the command name plus

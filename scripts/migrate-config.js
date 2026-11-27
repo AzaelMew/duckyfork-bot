@@ -423,6 +423,24 @@ function main() {
     console.log("note  guild: not in the config and no --guild-file given; the bot will boot with the GUILD_NAME placeholder");
   }
 
+  // The in-game admin commands are gated by these two player lists. A host
+  // config (or a --guild-file) that predates them gets the empty list, i.e.
+  // nobody is allowed - the safe default check-config.js expects.
+  const guildSection = getPath(config, "guild");
+  if (
+    guildSection.found &&
+    guildSection.value !== null &&
+    typeof guildSection.value === "object" &&
+    !Array.isArray(guildSection.value)
+  ) {
+    for (const key of ["overridePlayers", "blacklistEditors"]) {
+      const keyPath = `guild.${key}`;
+      if (getPath(config, keyPath).found) continue;
+      setPath(config, keyPath, getPath(example, keyPath).value);
+      report.added.push(keyPath);
+    }
+  }
+
   fs.writeFileSync(outputPath, JSON.stringify(config, null, 2));
 
   for (const entry of report.kept) console.log(`kept  ${entry}`);

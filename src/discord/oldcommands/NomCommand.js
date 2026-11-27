@@ -1,53 +1,10 @@
 const DiscordCommand = require('../../contracts/DiscordCommand')
-
-const config = require("../../../config.json");
-const axios = require("axios");
-const { time } = require('console');
-const fs = require('fs');
-const filename = 'lastCalledTime.txt'
-let lastRun
-
-
-async function getNom() {
-    return new Promise((resolve, reject) => {
-        try {
-            axios.get('https://api.otakugifs.xyz/gif?reaction=nom')
-                .then(response => {
-                    const data = response.data;
-                    fs.readFile(filename, 'utf8', (err, fileData) => {
-                        if (err) reject(err);
-                        const lastRunTime = parseInt(fileData) || 0;
-                        const currentTime = new Date().getTime();
-                        const fiveSecondsPassed = currentTime - lastRunTime >= 5000;
-
-                        if (fiveSecondsPassed) {
-                            fs.writeFile(filename, currentTime.toString(), () => {
-                                // Resolve with the first image URL
-                                
-                                if (data.url) {
-                                    resolve(data.url);
-                                } else {
-                                    reject("Invalid data format or no image URL found");
-                                }
-                            });
-                        } else {
-                            resolve("Please wait 5 seconds before running this command again");
-                        }
-                    });
-                })
-                .catch(error => {
-                    reject(error);
-                });
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
+const { runDiscordReaction } = require('../../contracts/commands/reactions.js')
 
 class NomCommand extends DiscordCommand {
     constructor(discord) {
         super(discord)
-    this.permission = "all"
+        this.permission = "all"
 
         this.name = 'nom'
         this.aliases = []
@@ -55,36 +12,11 @@ class NomCommand extends DiscordCommand {
     }
 
     onCommand(message) {
-        let args = this.getArgs(message)
-
-        getNom().then(Nom => {
-            if (Nom == "Please wait 5 seconds before running this command again") {
-                message.channel.send({
-                    embeds: [{
-                        description: "Please wait 5 seconds before running this command again",
-                        color: 0x2A2A2A,
-                        timestamp: new Date(),
-                        footer: {
-                            text: "BOT",
-                        },
-                    }],
-                })
-            } else {
-                this.sendMinecraftMessage(`/gc ${message.author.username}: "nom nom nom" `)
-                message.channel.send({
-                    embeds: [{
-                        description: `${message.author}: "nom nom nom" `,
-                        image: {
-                            url: Nom,
-                        },
-                        color: 0x2A2A2A,
-                        timestamp: new Date(),
-                        footer: {
-                            text: "BOT",
-                        },
-                    }],
-                })
-            }
+        runDiscordReaction(this, message, {
+            reaction: 'nom',
+            delayMs: 0,
+            minecraftText: `/gc ${message.author.username}: "nom nom nom" `,
+            embedDescription: `${message.author}: "nom nom nom" `,
         })
     }
 }

@@ -2,7 +2,6 @@ const path = require('path');
 const fs = require('fs');
 const tokensPath = path.join(__dirname, 'imgurTokens.js');
 const tokens = require(tokensPath); // dynamically require the current tokens
-const fetch = require('node-fetch');
 const FileType = require('file-type');
 
 const UPLOAD_URL = 'https://api.imgur.com/3/image';

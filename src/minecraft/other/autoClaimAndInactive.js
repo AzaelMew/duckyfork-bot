@@ -98,25 +98,14 @@ async function getRoles() {
       return ret
     }
     ini = []
-    for (let i = 0; i < data.guild.members.length + 1; i++) {
+    for (let i = 0; i < data.guild.members.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 250));
-      if (i <= data.guild.members.length - 1) {
-        let newData = data.guild.members[i];
-        let expValue = Object.values(newData.expHistory)
-
-        let total = expValue[0] + expValue[1] + expValue[2] + expValue[3] + expValue[4] + expValue[5] + expValue[6]
-        let xp = total
-        try {
-          getRank(data.guild.members[i].uuid, data.guild.members[i].rank, xp)
-        }
-        catch {
-          console.log("Well something fucked up..")
-        }
+      let rank = data.guild.members[i].rank;
+      try {
+        await getRank(data.guild.members[i].uuid, rank)
       }
-      else if (i == data.guild.members.length) {
-        for (let s = 0; s < 100; s++) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
+      catch {
+        console.log("Well something fucked up..")
       }
     }
   }
@@ -133,7 +122,7 @@ async function getRoles() {
     }
   }
 }
-async function getRank(uuid, rank, xp) {
+async function getRank(uuid, rank) {
   const { data } = await axios.get(`https://api.hypixel.net/v2/skyblock/profiles?key=${config.minecraft.API.hypixelAPIkey}&uuid=${uuid}`)
   let name = await getUsernameFromUUID(uuid)
   let newlvl = 0
