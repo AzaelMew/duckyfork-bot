@@ -32,7 +32,7 @@
     "@discordjs/rest": "^1.7.1",
     "axios": "0.27.2",
     "bad-words": "^3.0.4",
-    "canvas": "^2.11.2",
+    "canvas": "^3.2.3",
     "chalk": "^4.1.2",
     "discord-api-types": "^0.38.59",
     "discord-emoji-converter": "^1.2.10",
