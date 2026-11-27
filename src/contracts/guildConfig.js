@@ -149,6 +149,24 @@ function isProtectedPlayer(name) {
   return typeof name === "string" && list.some((entry) => sameName(entry, name));
 }
 
+/**
+ * Players allowed to run the in-game `!override` command (exact IGN, any
+ * case). Without the key nobody is allowed.
+ */
+function isOverridePlayer(name) {
+  const list = Array.isArray(guildSection().overridePlayers) ? guildSection().overridePlayers : [];
+  return typeof name === "string" && list.some((entry) => sameName(entry, name));
+}
+
+/**
+ * Players allowed to run the in-game `!blacklist` command (exact IGN, any
+ * case). Without the key nobody is allowed.
+ */
+function isBlacklistEditor(name) {
+  const list = Array.isArray(guildSection().blacklistEditors) ? guildSection().blacklistEditors : [];
+  return typeof name === "string" && list.some((entry) => sameName(entry, name));
+}
+
 module.exports = {
   guildName,
   isOwnGuild,
@@ -165,4 +183,6 @@ module.exports = {
   allRankNames,
   isKickExempt,
   isProtectedPlayer,
+  isOverridePlayer,
+  isBlacklistEditor,
 };

@@ -1,5 +1,5 @@
 const minecraftCommand = require("../../contracts/minecraftCommand.js");
-const config = require("../../../config.json");
+const guildConfig = require("../../contracts/guildConfig.js");
 
 class OverrideCommand extends minecraftCommand {
   constructor(minecraft) {
@@ -10,14 +10,14 @@ class OverrideCommand extends minecraftCommand {
     this.description = 'Executes commands as the minecraft bot'
   }
 
-  onCommand(username, message) { 
-      if (username.includes("Azael_Nyaa")||username.includes("Azael_Nya")){
-            message = message.split(" ")
-            message.shift()
-            message = message.join(" ")
-    
-        this.send(`/${message}`)
-      }
+  onCommand(username, message) {
+    if (!guildConfig.isOverridePlayer(username)) return;
+
+    message = message.split(" ")
+    message.shift()
+    message = message.join(" ")
+
+    this.send(`/${message}`)
   }
 }
 

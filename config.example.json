@@ -157,6 +157,8 @@
     },
     "kickExempt": [],
     "protectedPlayers": [],
+    "overridePlayers": [],
+    "blacklistEditors": [],
     "autoClaim": {
       "enabled": false,
       "cron": "0 17 * * *"
