@@ -2,6 +2,8 @@ const express = require('express')
 const config = require("../../config.json");
 const Logger = require(".././Logger.js");
 const CommandHandler = require("../minecraft/CommandHandler.js")
+const HypixelDiscordChatBridgeError = require("../contracts/errorHandler.js")
+const { generateID } = require("../contracts/helperFunctions.js")
 const executeCommand = async (bot, list) => {
   if (!bot || !bot._client.chat) {
     throw new HypixelDiscordChatBridgeError(
@@ -76,15 +78,6 @@ const executeCommand = async (bot, list) => {
     throw new Error(error);
   }
 };
-function makeid(length) {
-  var result           = '';
-  var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  var charactersLength = characters.length;
-  for ( var i = 0; i < length; i++ ) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
- return result;
-}
 
 class ExpressManager {
   constructor(app) {
@@ -128,7 +121,7 @@ class ExpressManager {
     try {
       Logger.webMessage(`Incoming request from ${request.ip} to ${request.originalUrl}`)
 
-      if (request.headers?.authorization !== config.web.token && request.query?.key !== config.web.token) {
+      if (request.headers?.authorization !== config.web.token) {
         return response.status(401).json({
           success: false,
           reason: 'Invalid or Missing Authentication'
@@ -137,7 +130,7 @@ class ExpressManager {
 
       next()
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -174,6 +167,12 @@ class ExpressManager {
           next()
           break
         case 'mutechat':
+          if (this.missing(['author', 'message'], request.body)) {
+            return response.status(400).json({
+              success: false,
+              reason: 'Malformed Body'
+            })
+          }
           next()
           break
         case 'mute':
@@ -183,6 +182,7 @@ class ExpressManager {
               reason: 'Malformed Body'
             })
           }
+          next()
           break
         case 'message':
           next()
@@ -207,7 +207,7 @@ class ExpressManager {
           next()
       }
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -245,7 +245,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -269,7 +269,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -293,7 +293,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -317,7 +317,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -340,7 +340,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -364,7 +364,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -388,7 +388,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -399,32 +399,36 @@ class ExpressManager {
 
   mutechat(request, response) {
     console.log(`[ExpressManager] ${request.body}`)
+    // validateBody rejects a body without author/message; optional chaining
+    // keeps a direct call from throwing on a missing field.
+    const author = request.body?.author
+    const message = request.body?.message
     try {
       if (this.app.minecraft.bot?.player) {
-        this.app.minecraft.bot.chat(`/gc ${request.body.author}: ${request.body.message}`)
+        this.app.minecraft.bot.chat(`/gc ${author}: ${message}`)
         // Sky runs `!` commands that arrive from the peer bot; Aria does not
         // (config.bridge.relayBangCommands false).
-        if (config.bridge.relayBangCommands && request.body.message.startsWith("!")) {
-          this.inGameCommand.handle(request.body.author, request.body.message)
+        if (config.bridge.relayBangCommands && message?.startsWith("!")) {
+          this.inGameCommand.handle(author, message)
         }
         if (config.features.peerDiscordRelay === false) {
           // Aria's tree passed only these fields, so its DiscordManager
           // onBroadcast returned early and peer messages never reached its
           // Discord. Kept as-is so the flag can reproduce either bot.
           this.app.minecraft.broadcastMessage({
-            username: request.body.author,
-            message: request.body.message,
+            username: author,
+            message: message,
             guildRank: config.bridge.peerRank.guildRank,
           })
         } else {
           this.app.minecraft.broadcastMessage({
-            fullMessage: `${request.body.author}: ${request.body.message}`,
+            fullMessage: `${author}: ${message}`,
             chat: "Guild",
             chatType: "guild",
-            username: request.body.author,
+            username: author,
             rank: config.bridge.peerRank.rank,
             guildRank: config.bridge.peerRank.guildRank,
-            message: request.body.message,
+            message: message,
             color: 0x2A2A2A,
           })
         }
@@ -438,7 +442,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -463,7 +467,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -487,7 +491,7 @@ class ExpressManager {
         reason: 'Minecraft client is unavailable at this time'
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -500,12 +504,12 @@ class ExpressManager {
     try{
       if (this.app.minecraft.bot?.player){
         if (request.body.type == "Guild"){
-            this.app.minecraft.bot.chat(`/gc ${request.body.author} [${request.body.guildRank}]: ${request.body.message} {${makeid(6)}}`)
+            this.app.minecraft.bot.chat(`/gc ${request.body.author} [${request.body.guildRank}]: ${request.body.message} ${generateID(6)}`)
             return response.status(200).json({
               success: true
             });
         } else if (request.body.type == "Officer"){
-          this.app.minecraft.bot.chat(`/oc ${request.body.author} [${request.body.guildRank}]: ${request.body.message} {${makeid(6)}}`)
+          this.app.minecraft.bot.chat(`/oc ${request.body.author} [${request.body.guildRank}]: ${request.body.message} ${generateID(6)}`)
           return response.status(200).json({
             success: true
           });
@@ -533,12 +537,19 @@ class ExpressManager {
 
   command(request, response) {
     try {
+      if (!this.app.minecraft.bot?.player) {
+        return response.status(409).json({
+          success: false,
+          reason: 'Minecraft client is unavailable at this time'
+        })
+      }
+
       this.app.minecraft.bot.chat(`${request.body.message}`)
       return response.status(200).json({
         success: true,
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -554,7 +565,7 @@ class ExpressManager {
         data: onList,
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,
@@ -570,7 +581,7 @@ class ExpressManager {
         data: onList,
       })
     } catch (error) {
-      this.app.log.error(error)
+      Logger.errorMessage(error)
 
       return response.status(500).json({
         success: false,

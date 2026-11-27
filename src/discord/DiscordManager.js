@@ -129,7 +129,9 @@ class DiscordManager extends CommunicationBridge {
       channel.send(imgurUrl);
       imgurUrl = "";
     }
-    await apicall(username, message, chat||"Guild", guildRank,)
+    // Fire and forget: postToPeer never throws, and a slow peer must not delay
+    // (or block) local Discord delivery of the same line.
+    apicall(username, message, chat || "Guild", guildRank)
     guildRank = `${guildRank} - ${bridge.name}`
 
     switch (mode) {
@@ -301,45 +303,6 @@ class DiscordManager extends CommunicationBridge {
     })
   }
 
-  async onOfficerBroadcast({ username, message, guildRank }) {
-
-    switch (this.app.config.discord.messageMode.toLowerCase()) {
-      case 'bot':
-        const channel = await this.stateHandler.getChannel("officer");
-
-        //sends to other bridge
-        if (username !== this.app.minecraft.bot.username) {
-          bridge.postToPeer("/api/message", { author: username, guild: bridge.peerGuild, message: message, type: "Officer", guildRank: guildRank })
-        }
-        guildRank = `${guildRank} - ${bridge.name}`
-
-        channel.send({
-          embeds: [{
-            description: message,
-            color: 0x2A2A2A,
-            timestamp: new Date(),
-            footer: {
-              text: guildRank,
-            },
-            author: {
-              name: username,
-              icon_url: 'https://minotar.net/helm/' + username+'.png',
-            },
-          }],
-        })
-        break
-
-      case 'webhook':
-        message = message.replace(/@/g, '') // Stop pinging @everyone or @here
-        this.app.discord.webhook.send(
-          message, { username: username, avatarURL: 'https://minotar.net/helm/' + username+'.png' }
-        )
-        break
-
-      default:
-        throw new Error('Invalid message mode: must be bot or webhook')
-    }
-  }
   async onOfficerCommand({ message, color }) {
     const channel = await this.stateHandler.getChannel("Officer");
     channel.send({

@@ -124,6 +124,8 @@ async function postToPeer(path, body) {
 
   try {
     return await axios.post(`${peerUrl}${path}`, body, {
+      // A peer that accepts the connection but never answers must not hang the caller.
+      timeout: 5000,
       headers: { Authorization: settings.token },
     });
   } catch (error) {
