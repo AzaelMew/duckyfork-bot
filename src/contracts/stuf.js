@@ -119,4 +119,4 @@ function encode(url) {
   return encoded;
 }
 
-module.exports = { encode, decode };
+module.exports = { encode, decode, charInc };

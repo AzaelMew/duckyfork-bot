@@ -9,11 +9,12 @@ const guildConfig = require("../guildConfig.js");
 const HypixelDiscordChatBridgeError = require("../errorHandler.js");
 
 const uploader = new imgur(require("../Imgur/imgurTokens.js").clientId);
+const { encode: Encode, decode } = require("../stuf.js");
 
-Canvas.registerFont('./src/fonts/MinecraftRegular-Bmg3.ttf', { family: 'Minecraft' });
-Canvas.registerFont('./src/fonts/minecraft-bold.otf', { family: 'MinecraftBold' });
-Canvas.registerFont('./src/fonts/2_Minecraft-Italic.otf', { family: 'MinecraftItalic' });
-Canvas.registerFont('./src/fonts/unifont.ttf', { family: 'MinecraftUnicode' });
+Canvas.registerFont('./src/contracts/Fonts/MinecraftRegular-Bmg3.ttf', { family: 'Minecraft' });
+Canvas.registerFont('./src/contracts/Fonts/minecraft-bold.otf', { family: 'MinecraftBold' });
+Canvas.registerFont('./src/contracts/Fonts/2_Minecraft-Italic.otf', { family: 'MinecraftItalic' });
+Canvas.registerFont('./src/contracts/Fonts/unifont.ttf', { family: 'MinecraftUnicode' });
 
 const RGBA_COLOR = {
   0: 'rgba(0,0,0,1)',
@@ -40,115 +41,6 @@ const RENDER_STYLES = {
   minecraft: { shadowColor: 'rgba(0, 0, 0, 0.7)', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   discord: { shadowColor: 'rgba(0, 0, 0, 0.2)', backgroundColor: 'rgba(0, 0, 0, 0)' },
 };
-
-function charInc(str, int) {
-  const charSet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let incrementedStr = '';
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
-    const index = charSet.indexOf(char);
-
-    if (index === -1) {
-      incrementedStr += char;
-    } else {
-      let offset = index + int;
-      while (offset >= charSet.length) {
-        offset -= charSet.length;
-      }
-      while (offset < 0) {
-        offset += charSet.length;
-      }
-      incrementedStr += charSet[offset];
-    }
-  }
-  return incrementedStr;
-}
-
-function decode(string) {
-  if (!string.startsWith('l$')) {
-    throw new Error('String does not appear to be in STuF');
-  }
-  const prefix = string[2];
-  const suffix = string[3];
-  const dotIndices = string.slice(4, string.indexOf('|')).split('').map(Number);
-  const urlBody = string.slice(string.indexOf('|') + 1);
-
-  const first9 = urlBody.slice(0, 9 - dotIndices.length);
-  const then = urlBody.slice(9 - dotIndices.length).replace(/\^/g, '.');
-
-  let url = first9 + then;
-  url = charInc(url, -1);
-
-  // Restore the dots in the first part of the URL
-  dotIndices.forEach((index) => {
-    url = url.slice(0, index) + '.' + url.slice(index);
-  });
-
-  // Add the prefix back
-  if (prefix === 'h') {
-    url = 'http://' + url;
-  } else if (prefix === 'H') {
-    url = 'https://' + url;
-  }
-
-  // Add the suffix back
-  if (suffix === '1') {
-    url += '.png';
-  } else if (suffix === '2') {
-    url += '.jpg';
-  } else if (suffix === '3') {
-    url += '.jpeg';
-  } else if (suffix === '4') {
-    url += '.gif';
-  }
-
-  return url;
-}
-
-function Encode(url) {
-  let encoded = "l$";
-  if (url.startsWith('http://')) {
-    encoded += 'h';
-    url = url.slice(7); // Remove the 'http://' part
-  } else if (url.startsWith('https://')) {
-    encoded += 'H';
-    url = url.slice(8); // Remove the 'https://' part
-  }
-
-  if (url.endsWith('.png')) {
-    encoded += '1';
-    url = url.slice(0, -4); // Remove the '.png' part
-  } else if (url.endsWith('.jpg')) {
-    encoded += '2';
-    url = url.slice(0, -4); // Remove the '.jpg' part
-  } else if (url.endsWith('.jpeg')) {
-    encoded += '3';
-    url = url.slice(0, -5); // Remove the '.jpeg' part
-  } else if (url.endsWith('.gif')) {
-    encoded += '4';
-    url = url.slice(0, -4); // Remove the '.gif' part
-  } else {
-    encoded += '0';
-  }
-
-  const dotIndices = [];
-  for (let i = 0; (i < url.length) && (i <= 8); i++) {
-    if (url[i] === '.') {
-      dotIndices.push(i);
-      if (dotIndices.length === 9) break; // Stop after 9 dots
-    }
-  }
-
-  let first9 = url.substring(0, 9);
-  const then = url.substring(9).replace(/\./g, '^');
-  first9 = first9.replace(/\./g, '');
-  const shifted = charInc(first9 + then, 1);
-
-  encoded += dotIndices.map(index => index.toString()).join('') + '|';
-  encoded += shifted;
-
-  return encoded;
-}
 
 function cleanChatText(description) {
   const lines = description.split('\n');
