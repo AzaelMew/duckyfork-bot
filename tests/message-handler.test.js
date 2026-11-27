@@ -1,3 +1,4 @@
+/* eslint-env jest */
 const { describe, it, expect, beforeEach } = require("@jest/globals");
 const config = require("../config.json");
 
