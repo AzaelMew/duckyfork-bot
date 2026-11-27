@@ -1,28 +1,15 @@
-// Step 3: Use Node.js fs module to write the JSON string to a file on your system
 const fs = require('fs');
-const axios = require("axios");
-let array = ["Xephor_EX","Azael_Nyaa","Vallekoen"]
 const minecraftCommand = require("../../contracts/minecraftCommand.js");
 const config = require("../../../config.json");
-async function getUUIDFromUsername(username) {
-    if (!(/^[a-zA-Z0-9_]{2,16}$/mg.test(username))) {
-        return "Error"
-    }
-    else {
-        try {
-            const { data } = await axios.get('https://api.mojang.com/users/profiles/minecraft/' + username)
-            let uuid = data.id
-            let user = username
-            return uuid
-        } catch {
-            const { data } = await axios.get('https://api.ashcon.app/mojang/v2/user/' + username)
-            let uuid = data.uuid.replace("-","");
-            let user = username
-            return uuid
-        }
+const guildConfig = require("../../contracts/guildConfig.js");
+const { getUUID } = require("../../contracts/API/mowojangAPI.js");
 
-    }
+// One UUID per line; ignore blank lines and stray whitespace so a lookup can
+// never match part of a line.
+function blacklistedIDs(contents) {
+    return contents.split(/\r?\n/).map((line) => line.trim()).filter((line) => line.length > 0);
 }
+
 class BlacklistCommand extends minecraftCommand {
     constructor(minecraft) {
         super(minecraft)
@@ -33,47 +20,59 @@ class BlacklistCommand extends minecraftCommand {
     }
 
     async onCommand(username, message) {
-        if(!array.includes(username)){
-
+        if (!guildConfig.isBlacklistEditor(username)) {
             return
         }
         let args = message.split(" ")
-        getUUIDFromUsername(args[2]).then(uuid => {
+        let uuid
+        try {
+            uuid = await getUUID(args[2])
+        } catch (error) {
+            if (error === "Invalid username.") {
+                this.send(`/oc ${args[2]} is not a valid username.`)
+            } else {
+                this.send(`/oc ${args[2]} could not be looked up.`)
+            }
+            return
+        }
+        try {
             let blacklist = fs.readFileSync(config.paths.blacklist, 'utf-8');
-            let blacklistedIDs = blacklist.trim().split('\n');
+            let ids = blacklistedIDs(blacklist);
             if (args[1] == "add") {
-                if (!blacklist.includes(uuid)) {
+                if (!ids.includes(uuid)) {
                     this.send(`/oc ${args[2]} ${uuid} added to blacklist.`)
-                    blacklist += uuid + "\n";
-
-                    // write the updated blacklist back to the file
-                    fs.writeFileSync(config.paths.blacklist, blacklist, 'utf-8');
+                    let separator = blacklist.length > 0 && !blacklist.endsWith("\n") ? "\n" : "";
+                    fs.writeFileSync(config.paths.blacklist, `${blacklist}${separator}${uuid}\n`, 'utf-8');
                 }
                 else{
                     this.send(`/oc ${args[2]} is already in the blacklist.`)
                 }
             }
             else if (args[1] == "remove") {
-                this.send(`/oc ${args[2]} ${uuid} removed from blacklist.`)
-                const index = blacklistedIDs.indexOf(uuid);
+                const index = ids.indexOf(uuid);
                 if (index > -1) {
-                    blacklistedIDs.splice(index, 1);
+                    ids.splice(index, 1);
 
                     // write the updated blacklist back to the file
-                    blacklist = blacklistedIDs.join('\n') + '\n';
-                    fs.writeFileSync('blacklist.txt', blacklist, 'utf-8');
+                    fs.writeFileSync(config.paths.blacklist, ids.map((id) => `${id}\n`).join(""), 'utf-8');
+                    this.send(`/oc ${args[2]} ${uuid} removed from blacklist.`)
+                }
+                else {
+                    this.send(`/oc ${args[2]} is not in the blacklist.`)
                 }
             }
             else if (args[1] == "check"){
-                if (!blacklist.includes(uuid)){
+                if (!ids.includes(uuid)){
                     this.send(`/oc ${args[2]} is not in the blacklist.`)
                 }
                 else{
                     this.send(`/oc ${args[2]} is blacklisted.`)
                 }
             }
-
-        })
+        } catch (error) {
+            console.error("Error updating the blacklist:", error);
+            this.send(`/oc Could not update the blacklist for ${args[2]}.`)
+        }
     }
 }
 

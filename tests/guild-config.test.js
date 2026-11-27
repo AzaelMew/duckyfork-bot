@@ -50,6 +50,8 @@ function skyGuild() {
     },
     kickExempt: ["ExemptPlayer"],
     protectedPlayers: ["owner_ign"],
+    overridePlayers: ["Azael_Nyaa", "Azael_Nya"],
+    blacklistEditors: ["Xephor_EX", "Azael_Nyaa", "Vallekoen"],
     autoClaim: { enabled: true, cron: "00 17 * * *" },
     inactiveKick: { enabled: false, cron: "30 17 * * *", days: 25 },
   };
@@ -199,6 +201,27 @@ describe("guildConfig helpers", () => {
     expect(guild.isProtectedPlayer("OWNER_IGN")).toBe(true);
     expect(guild.isProtectedRank("Elder")).toBe(true);
     expect(guild.isProtectedRank("Knight")).toBe(false);
+  });
+
+  it("gates the in-game admin commands on exact configured players", () => {
+    const guild = load(skyGuild());
+    // Case-insensitive, but the whole name must match: a name that only
+    // contains an allowed one (Azael_Nyan) is not an admin.
+    expect(guild.isOverridePlayer("Azael_Nyaa")).toBe(true);
+    expect(guild.isOverridePlayer("AZAEL_NYA")).toBe(true);
+    expect(guild.isOverridePlayer("Azael_Nyan")).toBe(false);
+    expect(guild.isOverridePlayer("NotAzael_Nyaa")).toBe(false);
+    expect(guild.isOverridePlayer(undefined)).toBe(false);
+
+    expect(guild.isBlacklistEditor("Xephor_EX")).toBe(true);
+    expect(guild.isBlacklistEditor("vallekoen")).toBe(true);
+    expect(guild.isBlacklistEditor("Xephor_EX2")).toBe(false);
+    expect(guild.isBlacklistEditor("Azael_Nyan")).toBe(false);
+
+    // No key at all: nobody is allowed (safe default).
+    const shana = load(shanaGuild());
+    expect(shana.isOverridePlayer("Azael_Nyaa")).toBe(false);
+    expect(shana.isBlacklistEditor("Xephor_EX")).toBe(false);
   });
 });
 

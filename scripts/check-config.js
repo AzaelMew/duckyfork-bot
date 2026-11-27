@@ -248,6 +248,20 @@ function checkRequiredKeys(config) {
     problems.push("discord.commands.disabled: expected an array of command names");
   }
 
+  // The in-game admin commands are gated by these two player lists instead of
+  // the hardcoded names they used to carry. An empty list means nobody is
+  // allowed, which is the safe default; a missing list is reported by the
+  // generic key walk above.
+  for (const keyPath of ["guild.overridePlayers", "guild.blacklistEditors"]) {
+    const list = readPath(config, keyPath);
+    if (!list.found) continue;
+    if (!Array.isArray(list.value)) {
+      problems.push(`${keyPath}: expected an array of player names`);
+    } else if (list.value.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+      problems.push(`${keyPath}: every entry must be a non-empty player name`);
+    }
+  }
+
   const peerUrl = readPath(config, "bridge.peerUrl");
   if (!standalone && peerUrl.found && typeof peerUrl.value === "string" && peerUrl.value.trim().length > 0) {
     let parsed;
