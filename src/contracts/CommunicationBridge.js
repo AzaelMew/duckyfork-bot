@@ -32,9 +32,6 @@ class CommunicationBridge {
   broadcastOfficerCommand(event) {
     return this.bridge.onOfficerCommand(event)
   }
-  broadcastOfficerMessage(event) {
-    return this.bridge.onOfficerBroadcast(event)
-  }
 
   broadcastNewImage(event) {
     return this.bridge.onBroadcastNewImage(event)
@@ -42,9 +39,6 @@ class CommunicationBridge {
 
   broadcastPlayerToggle(event) {
     return this.bridge.onPlayerToggle(event)
-  }
-  broadcastPlayerToggle2(event) {
-    return this.bridge.onPlayerToggle2(event)
   }
 
   broadcastCleanEmbed(event) {
@@ -59,13 +53,6 @@ class CommunicationBridge {
   }
   broadcastCommandEmbed3(event) {
     return this.bridge.onBroadcastCommandEmbed3(event)
-  }
-broadcastOnEmbed(event) {
-  return this.bridge.onBroadcastOnEmbed(event)
-}
-
-  broadcastLogEmbed(event) {
-    return this.bridge.onBroadcastLog(event)
   }
 
   broadcastHeadedEmbed(event) {

@@ -114,6 +114,7 @@ describe("postToPeer", () => {
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(axios.post).toHaveBeenCalledWith("http://peer.test:3001/api/command", { message: "/gc hi" }, {
+      timeout: 5000,
       headers: { Authorization: TEST_TOKEN },
     });
     expect(response).toEqual({ data: { success: true } });

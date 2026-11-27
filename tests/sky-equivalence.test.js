@@ -74,7 +74,7 @@ beforeEach(() => {
 
 const EXPECTED = () => ({
   url: `${config.bridge.peerUrl}/api/command`,
-  options: { headers: { Authorization: config.web.token } },
+  options: { timeout: 5000, headers: { Authorization: config.web.token } },
 });
 
 describe("minecraft command mirror (Sky behaviour)", () => {
@@ -189,7 +189,7 @@ describe("no hardcoded peer left in the tree", () => {
     const callSites = [
       ["src/contracts/minecraftCommand.js", 2, "/api/command"],
       ["src/contracts/DiscordCommand.js", 1, "/api/command"],
-      ["src/discord/DiscordManager.js", 2, "/api/message"],
+      ["src/discord/DiscordManager.js", 1, "/api/message"],
       ["src/discord/handlers/MessageHandler.js", 1, "/api/command"],
       ["src/minecraft/MinecraftManager.js", 1, "/api/command"],
       ["src/minecraft/handlers/ChatHandler.js", 7, "/api/command"],

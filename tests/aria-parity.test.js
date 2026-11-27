@@ -148,8 +148,10 @@ describe("features.retryOnRateLimit", () => {
     await listener("You are sending commands too fast! Please slow down.");
 
     expect(bot.removeListener).toHaveBeenCalledWith("message", listener);
-    expect(axios.post).toHaveBeenCalledTimes(2);
-    expect(axios.post.mock.calls[1][1]).toEqual({ message: "/gc hello" });
+    // The retry is the same line, so it is no longer mirrored to the peer:
+    // only the first attempt posts (a retry used to duplicate it there).
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(axios.post.mock.calls[0][1]).toEqual({ message: "/gc hello" });
     expect(bot.chat).toHaveBeenLastCalledWith("/gc hello");
   }, 10000);
 
@@ -164,10 +166,11 @@ describe("features.retryOnRateLimit", () => {
 
     await listener("You cannot say the same message twice!");
 
-    expect(axios.post).toHaveBeenCalledTimes(2);
+    // Only the first attempt mirrors to the peer; the retry is local.
+    expect(axios.post).toHaveBeenCalledTimes(1);
     // Aria's listener wraps an already-braced generateID() result, so the
     // suffix really is "{{id}}" - kept as-is rather than "fixed".
-    expect(axios.post.mock.calls[1][1].message).toMatch(/^\/gc hello \{\{[A-Za-z0-9]{24}\}\}$/);
+    expect(bot.chat).toHaveBeenLastCalledWith(expect.stringMatching(/^\/gc hello \{\{[A-Za-z0-9]{24}\}\}$/));
   }, 10000);
 });
 

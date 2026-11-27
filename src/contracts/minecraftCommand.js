@@ -27,7 +27,11 @@ class minecraftCommand {
     if (typeof bot === "undefined" || bot?._client?.chat === undefined) {
       return;
     }
-    bridge.postToPeer("/api/command", { message: message });
+    // Only the first attempt mirrors the line to the peer: every retry sends
+    // the same line again, so re-posting it would duplicate it on the peer.
+    if (n === 1) {
+      bridge.postToPeer("/api/command", { message: message });
+    }
 
     let listener;
 
@@ -38,25 +42,25 @@ class minecraftCommand {
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
-            return this.send("/gc Command failed to send message after 5 attempts. Please try again later.");
+            return this.warpSend("/gc Command failed to send message after 5 attempts. Please try again later.");
           }
 
           await delay(250);
 
-          return this.send(message);
+          return this.send(message, n);
         } else if (msg.toString().includes(REPEAT_MESSAGE) === true && msg.toString().includes(":") === false) {
           bot.removeListener("message", listener);
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
-            return this.send("/gc Command failed to send message after 5 attempts. Please try again later.");
+            return this.warpSend("/gc Command failed to send message after 5 attempts. Please try again later.");
           }
 
           await delay(250);
 
           return this.send(
             `${message} {${helperFunctions.generateID(config.minecraft.bot.messageRepeatBypassLength)}}`,
-            n + 1,
+            n,
           );
         }
       };
