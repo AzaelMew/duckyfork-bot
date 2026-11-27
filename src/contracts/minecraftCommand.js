@@ -33,12 +33,15 @@ class minecraftCommand {
       bridge.postToPeer("/api/command", { message: message });
     }
 
+    // Keep the bot this line was sent on: a reconnect replaces global.bot, and
+    // the listener and its cleanup timer must stay on the old one.
+    const client = bot;
     let listener;
 
     if (config.features.retryOnRateLimit) {
       listener = async (msg) => {
         if (msg.toString().includes(RATE_LIMIT_MESSAGE) && !msg.toString().includes(":")) {
-          bot.removeListener("message", listener);
+          client.removeListener("message", listener);
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
@@ -49,7 +52,7 @@ class minecraftCommand {
 
           return this.send(message, n);
         } else if (msg.toString().includes(REPEAT_MESSAGE) === true && msg.toString().includes(":") === false) {
-          bot.removeListener("message", listener);
+          client.removeListener("message", listener);
           n++;
 
           if (n >= RETRY_ATTEMPTS) {
@@ -59,20 +62,20 @@ class minecraftCommand {
           await delay(250);
 
           return this.send(
-            `${message} {${helperFunctions.generateID(config.minecraft.bot.messageRepeatBypassLength)}}`,
+            `${message} ${helperFunctions.generateID(config.minecraft.bot.messageRepeatBypassLength)}`,
             n,
           );
         }
       };
 
-      bot.once("message", listener);
+      client.once("message", listener);
     }
 
-    bot.chat(message);
+    client.chat(message);
 
     if (listener !== undefined) {
       setTimeout(() => {
-        bot.removeListener("message", listener);
+        client.removeListener("message", listener);
       }, 500);
     }
   }

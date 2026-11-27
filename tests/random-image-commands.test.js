@@ -286,8 +286,9 @@ describe("commands use the shared module", () => {
         const channel = { send: jest.fn() };
 
         command.onCommand({ content: `!${name}`, channel: channel });
-        for (let i = 0; i < 20 && channel.send.mock.calls.length === 0; i += 1) {
-          await new Promise((resolve) => setImmediate(resolve));
+        // The dog command reads its cooldown file asynchronously, so poll by time, not by tick count.
+        for (const start = Date.now(); channel.send.mock.calls.length === 0 && Date.now() - start < 2000; ) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
         }
 
         const embed = channel.send.mock.calls[0][0].embeds[0];

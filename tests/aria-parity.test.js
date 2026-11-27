@@ -168,9 +168,8 @@ describe("features.retryOnRateLimit", () => {
 
     // Only the first attempt mirrors to the peer; the retry is local.
     expect(axios.post).toHaveBeenCalledTimes(1);
-    // Aria's listener wraps an already-braced generateID() result, so the
-    // suffix really is "{{id}}" - kept as-is rather than "fixed".
-    expect(bot.chat).toHaveBeenLastCalledWith(expect.stringMatching(/^\/gc hello \{\{[A-Za-z0-9]{24}\}\}$/));
+    // generateID() already returns the braces, so the suffix is a single "{id}".
+    expect(bot.chat).toHaveBeenLastCalledWith(expect.stringMatching(/^\/gc hello \{[A-Za-z0-9]{24}\}$/));
   }, 10000);
 });
 

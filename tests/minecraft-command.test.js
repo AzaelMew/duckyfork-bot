@@ -112,7 +112,7 @@ describe("minecraftCommand.send retry limit", () => {
 
     expect(bot.chat).toHaveBeenCalledTimes(5);
     expect(bot.chat).toHaveBeenLastCalledWith(FAILURE_MESSAGE);
-    expect(bot.chat.mock.calls[1][0]).toMatch(/^\/gc hello \{\{[a-z0-9]{6}\}\}$/);
+    expect(bot.chat.mock.calls[1][0]).toMatch(/^\/gc hello \{[a-z0-9]{6}\}$/);
     expect(bridge.postToPeer).toHaveBeenCalledTimes(1);
   });
 
