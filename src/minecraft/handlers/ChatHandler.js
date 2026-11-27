@@ -1,4 +1,4 @@
-const { replaceAllRanks, replaceVariables } = require("../../contracts/helperFunctions.js");
+const { replaceAllRanks, replaceVariables, generateID } = require("../../contracts/helperFunctions.js");
 
 const { getLatestProfile } = require("../../../API/functions/getLatestProfile.js");
 const updateRolesCommand = require("../../discord/commands/updateCommand.js");
@@ -20,14 +20,14 @@ const path = require('path');
 const { setInterval } = require('timers/promises');
 const Canvas = require('canvas');
 const uploader = require('../../contracts/Imgur/imgurExport');
-const { url } = require('inspector');
+const { encode, decode } = require('../../contracts/stuf.js');
 
 let retsu = ""
 let mes = "";
-Canvas.registerFont('./src/fonts/MinecraftRegular-Bmg3.ttf', { family: 'Minecraft' });
-Canvas.registerFont('./src/fonts/minecraft-bold.otf', { family: 'MinecraftBold' });
-Canvas.registerFont('./src/fonts/2_Minecraft-Italic.otf', { family: 'MinecraftItalic' });
-Canvas.registerFont('./src/fonts/unifont.ttf', { family: 'MinecraftUnicode' });
+Canvas.registerFont('./src/contracts/Fonts/MinecraftRegular-Bmg3.ttf', { family: 'Minecraft' });
+Canvas.registerFont('./src/contracts/Fonts/minecraft-bold.otf', { family: 'MinecraftBold' });
+Canvas.registerFont('./src/contracts/Fonts/2_Minecraft-Italic.otf', { family: 'MinecraftItalic' });
+Canvas.registerFont('./src/contracts/Fonts/unifont.ttf', { family: 'MinecraftUnicode' });
 const RGBA_COLOR = {
   0: 'rgba(0,0,0,1)',
   1: 'rgba(0,0,170,1)',
@@ -118,123 +118,6 @@ async function getItemLore(id) {
   if (!uploadResponse.url) return "Failed to upload image.";
   else return uploadResponse.url
 }
-function charInc(str, int) {
-  const charSet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let incrementedStr = '';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    let index = charSet.indexOf(char);
-
-    if (index == -1) {
-      incrementedStr += char;
-    } else {
-      let offset = index + int
-      while (offset >= charSet.length) {
-        offset -= charSet.length
-      }
-      while (offset < 0) {
-        offset += charSet.length
-      }
-      let nextChar = charSet[offset];
-      incrementedStr += nextChar;
-    }
-  }
-  return incrementedStr;
-}
-function decode(string) {
-  if (!string.startsWith('l$')) {
-    throw new Error('String does not appear to be in STuF');
-  }
-  let prefix = string[2];
-  let suffix = string[3];
-  let dotIndices = string.slice(4, string.indexOf('|')).split('').map(Number);
-  let urlBody = string.slice(string.indexOf('|') + 1);
-
-  let first9 = urlBody.slice(0, 9 - dotIndices.length);
-  let then = urlBody.slice(9 - dotIndices.length).replace(/\^/g, '.');
-
-  let url = first9 + then;
-  url = charInc(url, -1)
-
-  // Restore the dots in the first part of the URL
-  dotIndices.forEach((index) => {
-    url = url.slice(0, index) + '.' + url.slice(index);
-  });
-
-  // Add the prefix back
-  if (prefix === 'h') {
-    url = 'http://' + url;
-  } else if (prefix === 'H') {
-    url = 'https://' + url;
-  }
-
-  // Add the suffix back
-  if (suffix === '1') {
-    url += '.png';
-  } else if (suffix === '2') {
-    url += '.jpg';
-  } else if (suffix === '3') {
-    url += '.jpeg';
-  } else if (suffix === '4') {
-    url += '.gif';
-  }
-
-  return url;
-}
-function Encode(url) {
-  let encoded = "l$"
-  if (url.startsWith('http://')) {
-    encoded += 'h';
-    url = url.slice(7); // Remove the 'http://' part
-  } else if (url.startsWith('https://')) {
-    encoded += 'H';
-    url = url.slice(8); // Remove the 'https://' part
-  }
-
-  if (url.endsWith('.png')) {
-    encoded += '1';
-    url = url.slice(0, -4); // Remove the '.png' part
-  } else if (url.endsWith('.jpg')) {
-    encoded += '2';
-    url = url.slice(0, -4); // Remove the '.jpg' part
-  } else if (url.endsWith('.jpeg')) {
-    encoded += '3';
-    url = url.slice(0, -5); // Remove the '.jpeg' part
-  } else if (url.endsWith('.gif')) {
-    encoded += '4';
-    url = url.slice(0, -4); // Remove the '.gif' part
-  } else {
-    encoded += '0';
-  }
-
-  let dotIndices = [];
-  for (let i = 0; (i < url.length) && (i <= 8); i++) {
-    if (url[i] === '.') {
-      dotIndices.push(i);
-      if (dotIndices.length === 9) break; // Stop after 9 dots
-    }
-  }
-
-  let first9 = url.substring(0, 9)
-  let then = url.substring(9).replace(/\./g, '^');
-  first9 = first9.replace(/\./g, '');
-  let shifted = charInc(first9 + then, 1)
-
-  encoded += dotIndices.map(index => index.toString()).join('') + '|';
-  encoded += shifted
-
-
-  return encoded;
-}
-function makeid(length) {
-  var result = '';
-  var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  var charactersLength = characters.length;
-  for (var i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  return result;
-}
 class StateHandler extends eventHandler {
   constructor(minecraft, command, discord) {
     super();
@@ -316,19 +199,19 @@ class StateHandler extends eventHandler {
             }
           }
           let meetRequirements = false;
-          const skyblockLevel = newlvl / 100 ?? 0;
+          const skyblockLevel = newlvl / 100;
 
           if (
-            skyblockLevel > config.minecraft.guildRequirements.requirements.skyblockLevel &&
+            skyblockLevel >= config.minecraft.guildRequirements.requirements.skyblockLevel &&
             config.minecraft.guildRequirements.requirements.skyblockLevel > 0
           ) {
             meetRequirements = true;
           }
           console.log(
-            `/oc [STATCHECK] ${username}${meetRequirements ? "meets" : "doesn't meet"} the requirements. SB Level: ${skyblockLevel.toLocaleString()}`,
+            `/oc [STATCHECK] ${username} ${meetRequirements ? "meets" : "doesn't meet"} the requirements. SB Level: ${skyblockLevel.toLocaleString()}`,
           )
           bot.chat(
-            `/oc [STATCHECK] ${username}${meetRequirements ? "meets" : "doesn't meet"} the requirements. SB Level: ${skyblockLevel.toLocaleString()}`,
+            `/oc [STATCHECK] ${username} ${meetRequirements ? "meets" : "doesn't meet"} the requirements. SB Level: ${skyblockLevel.toLocaleString()}`,
           );
           await delay(1000);
 
@@ -353,7 +236,6 @@ class StateHandler extends eventHandler {
           const statsEmbed = new EmbedBuilder()
               .setColor(2067276)
               .setTitle(`${username} has been blocked from joining by the blacklist`)
-              .setDescription(`Skyblock level: ${skyblockLevel.toLocaleString()}`)
 
               .setThumbnail(`https://minotar.net/helm/${username}.png`)
 
@@ -365,7 +247,7 @@ class StateHandler extends eventHandler {
     if (this.isLoginMessage(message)) {
       if (config.discord.other.joinMessage === true) {
         const username = message.split(">")[1].trim().split("joined.")[0].trim();
-        bridge.postToPeer("/api/command", { message: `/gc ${username} joined. {${makeid(12)}}` })
+        bridge.postToPeer("/api/command", { message: `/gc ${username} joined. ${generateID(12)}` })
         return this.minecraft.broadcastPlayerToggle({
           fullMessage: colouredMessage,
           username: username,
@@ -379,7 +261,7 @@ class StateHandler extends eventHandler {
     if (this.isLogoutMessage(message)) {
       if (config.discord.other.joinMessage === true) {
         const username = message.split(">")[1].trim().split("left.")[0].trim();
-        bridge.postToPeer("/api/command", { message: `/gc ${username} left. {${makeid(12)}}` })
+        bridge.postToPeer("/api/command", { message: `/gc ${username} left. ${generateID(12)}` })
         return this.minecraft.broadcastPlayerToggle({
           fullMessage: colouredMessage,
           username: username,
@@ -402,7 +284,7 @@ class StateHandler extends eventHandler {
         })}`,
       );
       await this.updateUser(username);
-      bridge.postToPeer("/api/command", { message: `/gc ${username} has joined ${bridge.name}. {${makeid(12)}}` })
+      bridge.postToPeer("/api/command", { message: `/gc ${username} has joined ${bridge.name}. ${generateID(12)}` })
       return [
         this.minecraft.broadcastHeadedEmbed({
           message: replaceVariables(messages.joinMessage, { username }),
@@ -420,7 +302,7 @@ class StateHandler extends eventHandler {
         .trim()
         .split(/ +/g)[0];
       await this.updateUser(username);
-      bridge.postToPeer("/api/command", { message: `/gc ${username} left the guild. {${makeid(12)}}` })
+      bridge.postToPeer("/api/command", { message: `/gc ${username} left the guild. ${generateID(12)}` })
 
       return [
 
@@ -441,7 +323,7 @@ class StateHandler extends eventHandler {
         .trim()
         .split(/ +/g)[0];
       await this.updateUser(username);
-      bridge.postToPeer("/api/command", { message: `/gc ${username} was kicked from the guild. {${makeid(12)}}` })
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was kicked from the guild. ${generateID(12)}` })
 
       return [
 
@@ -467,7 +349,7 @@ class StateHandler extends eventHandler {
         .pop()
         .trim();
       await this.updateUser(username);
-      bridge.postToPeer("/api/command", { message: `/gc ${username} was promoted to ${rank} {${makeid(12)}}` })
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was promoted to ${rank} ${generateID(12)}` })
 
       return [
         this.minecraft.broadcastCleanEmbed({
@@ -494,7 +376,7 @@ class StateHandler extends eventHandler {
         .pop()
         .trim();
       await this.updateUser(username);
-      bridge.postToPeer("/api/command", { message: `/gc ${username} was demoted to ${rank} {${makeid(12)}}` })
+      bridge.postToPeer("/api/command", { message: `/gc ${username} was demoted to ${rank} ${generateID(12)}` })
 
       return [
         this.minecraft.broadcastCleanEmbed({
@@ -875,7 +757,7 @@ class StateHandler extends eventHandler {
               message: newmessage,
               guildRank: guildRank,
               url: responseurl,
-              overflow: overflow.replace(itemNumber, Encode(responseurl))
+              overflow: overflow.replace(itemNumber, encode(responseurl))
             })
             return this.bot.chat(`/gc ${username}: ${responseurl}`)
           })

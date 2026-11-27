@@ -1,54 +1,48 @@
 const { uploadImage } = require("../../contracts/API/imgurAPI.js");
 const { demojify } = require("discord-emoji-converter");
 const config = require("../../../config.json");
-const bridge = require("../../contracts/bridge.js");
 
 const uploader = require('../../contracts/Imgur/imgurExport');
+const { encode } = require('../../contracts/stuf.js');
 
-const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
-const { url } = require("inspector");
-async function compressImage(imagePath, maxSizeMB = 10, qualityReductionStep = 5) {
+
+// Images are fetched into memory, so cap what a single link can cost us.
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const COMPRESS_THRESHOLD_BYTES = 10 * 1024 * 1024;
+
+async function compressImage(buffer, maxSizeMB = 10, qualityReductionStep = 5) {
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+  if (buffer.length <= maxSizeBytes) {
+    console.log('Image already smaller than max size.  No compression needed.');
+    return buffer;
+  }
 
   try {
     // Lazy on purpose: sharp is native, and a host that runs with
     // features.imageCompression false (Aria) must boot without it.
     const sharp = require("sharp");
-    const stats = await fs.promises.stat(imagePath);
-    if (stats.size <= maxSizeBytes) {
-      console.log('Image already smaller than max size.  No compression needed.');
-      return imagePath;
-    }
-
-    const outputPath = path.join(path.dirname(imagePath),  // Get the directory of the original file
-      `${path.basename(imagePath, path.extname(imagePath))}-compressed${path.extname(imagePath)}`);
 
     let quality = 95;
     while (true) {
       try {
-        await sharp(imagePath)
+        const compressed = await sharp(buffer)
           .jpeg({ quality }) // Or .png({ quality }), .webp({ quality }), adjust to the original image format if needed
-          .toFile(outputPath);
+          .toBuffer();
 
-        const compressedStats = await fs.promises.stat(outputPath);
-        if (compressedStats.size <= maxSizeBytes) {
-          console.log(`Compressed image saved to: ${outputPath}`);
-          return outputPath;
-        } else {
-          quality -= qualityReductionStep;
-          if (quality <= 0) {
-            console.error('Compression failed: Could not reach target size.');
-            // Optionally delete partially compressed file. 
-            await fs.promises.unlink(outputPath); // Cleanup
-            return null;
-          }
+        if (compressed.length <= maxSizeBytes) {
+          console.log(`Compressed image to ${compressed.length} bytes`);
+          return compressed;
+        }
+
+        quality -= qualityReductionStep;
+        if (quality <= 0) {
+          console.error('Compression failed: Could not reach target size.');
+          return null;
         }
       } catch (error) {
         console.error('Error during compression:', error);
-        // Cleanup potentially incomplete file
-        if (fs.existsSync(outputPath)) await fs.promises.unlink(outputPath);
         return null;
       }
     }
@@ -58,163 +52,37 @@ async function compressImage(imagePath, maxSizeMB = 10, qualityReductionStep = 5
   }
 }
 async function downloadUploadDeleteImage(imageUrl) {
-  try {
-    const filePath = path.join(__dirname, 'downloaded_image.png');
-
-    const response = await axios({
-      url: imageUrl,
-      method: 'GET',
-      responseType: 'stream'
-    });
-
-    const writer = fs.createWriteStream(filePath);
-    response.data.pipe(writer);
-
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-
-    // *** COMPRESSION STEP INSERTED HERE ***
-    // Compression (Sky only; Aria uploads the original)
-    let fileToDelete = filePath; // Default to original if compression fails/skipped
-    const compressedFilePath = config.features.imageCompression ? await compressImage(filePath) : null;
-    if (compressedFilePath) {
-      fileToDelete = compressedFilePath; // Compression succeeded, delete compressed file
-    }
-
-    const uploadResponse = await uploader.upload(fileToDelete); // Use compressed or original
-    console.log('Image uploaded successfully');
-
-    // Delete after upload
-    console.log(fileToDelete)
-    fs.unlink(fileToDelete, (err) => {
-      if (err) {
-        console.error('Failed to delete file:', err);
-      } else {
-        console.log('File deleted successfully');
-      }
-    });
-
-    return uploadResponse.url;
-
-  } catch (error) {
-    console.error('Error:', error);
-    // Important error handling: Delete the downloaded file if an error occurs
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath); // Use promises for async error handling
-    }
-    // Consider re-throwing the error or returning a specific error value to indicate failure
-    throw error; // Re-throw the error to be handled by the calling function
+  if (typeof imageUrl !== 'string' || imageUrl.length === 0) {
+    throw new Error('No image URL to download');
   }
-}
-function charInc(str, int) {
-  const charSet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let incrementedStr = '';
-  for (let i = 0; i < str.length; i++) {
-    let char = str[i];
-    let index = charSet.indexOf(char);
 
-    if (index == -1) {
-      incrementedStr += char;
-    } else {
-      let offset = index + int
-      while (offset >= charSet.length) {
-        offset -= charSet.length
-      }
-      while (offset < 0) {
-        offset += charSet.length
-      }
-      let nextChar = charSet[offset];
-      incrementedStr += nextChar;
-    }
-  }
-  return incrementedStr;
-}
-function decode(string) {
-  if (!string.startsWith('l$')) {
-    throw new Error('String does not appear to be in STuF');
-  }
-  let prefix = string[2];
-  let suffix = string[3];
-  let dotIndices = string.slice(4, string.indexOf('|')).split('').map(Number);
-  let urlBody = string.slice(string.indexOf('|') + 1);
+  // zip.azael.moe serves the raw file from /raw/, /u/ is the viewer page
+  const downloadUrl = imageUrl.replace('zip.azael.moe/u/', 'zip.azael.moe/raw/');
 
-  let first9 = urlBody.slice(0, 9 - dotIndices.length);
-  let then = urlBody.slice(9 - dotIndices.length).replace(/\^/g, '.');
-
-  let url = first9 + then;
-  url = charInc(url, -1)
-
-  // Restore the dots in the first part of the URL
-  dotIndices.forEach((index) => {
-    url = url.slice(0, index) + '.' + url.slice(index);
+  const response = await axios({
+    url: downloadUrl,
+    method: 'GET',
+    responseType: 'arraybuffer',
+    maxContentLength: MAX_IMAGE_BYTES,
+    maxBodyLength: MAX_IMAGE_BYTES,
+    timeout: 30000
   });
 
-  // Add the prefix back
-  if (prefix === 'h') {
-    url = 'http://' + url;
-  } else if (prefix === 'H') {
-    url = 'https://' + url;
+  let buffer = Buffer.from(response.data);
+
+  // Compression (Sky only; Aria uploads the original)
+  if (config.features.imageCompression && buffer.length > COMPRESS_THRESHOLD_BYTES) {
+    const compressed = await compressImage(buffer);
+    if (compressed) buffer = compressed;
   }
 
-  // Add the suffix back
-  if (suffix === '1') {
-    url += '.png';
-  } else if (suffix === '2') {
-    url += '.jpg';
-  } else if (suffix === '3') {
-    url += '.jpeg';
-  } else if (suffix === '4') {
-    url += '.gif';
+  const uploadResponse = await uploader.uploadBuffer(buffer);
+  if (!uploadResponse || !uploadResponse.url) {
+    throw new Error(`Image upload failed: ${uploadResponse?.message ?? 'no url returned'}`);
   }
+  console.log('Image uploaded successfully');
 
-  return url;
-}
-async function Encode(url) {
-  let encoded = "l$"
-  if (url.startsWith('http://')) {
-    encoded += 'h';
-    url = url.slice(7); // Remove the 'http://' part
-  } else if (url.startsWith('https://')) {
-    encoded += 'H';
-    url = url.slice(8); // Remove the 'https://' part
-  }
-
-  if (url.endsWith('.png')) {
-    encoded += '1';
-    url = url.slice(0, -4); // Remove the '.png' part
-  } else if (url.endsWith('.jpg')) {
-    encoded += '2';
-    url = url.slice(0, -4); // Remove the '.jpg' part
-  } else if (url.endsWith('.jpeg')) {
-    encoded += '3';
-    url = url.slice(0, -5); // Remove the '.jpeg' part
-  } else if (url.endsWith('.gif')) {
-    encoded += '4';
-    url = url.slice(0, -4); // Remove the '.gif' part
-  } else {
-    encoded += '0';
-  }
-
-  let dotIndices = [];
-  for (let i = 0; (i < url.length) && (i <= 8); i++) {
-    if (url[i] === '.') {
-      dotIndices.push(i);
-      if (dotIndices.length === 9) break; // Stop after 9 dots
-    }
-  }
-
-  let first9 = url.substring(0, 9)
-  let then = url.substring(9).replace(/\./g, '^');
-  first9 = first9.replace(/\./g, '');
-  let shifted = charInc(first9 + then, 1)
-
-  encoded += dotIndices.map(index => index.toString()).join('') + '|';
-  encoded += shifted
-
-
-  return encoded;
+  return uploadResponse.url;
 }
 
 class MessageHandler {
@@ -228,49 +96,8 @@ class MessageHandler {
       if (message.author.id === client.user.id || !this.shouldBroadcastMessage(message)) {
         return;
       }
-      const urlRegex = /https?:\/\/[^\s]+/g;
-      const urls = message.content.match(urlRegex);
-      this.oldcommand.handle(message)
-      if (urls) {
-        let prom = new Promise((resolve, reject) => {
-          urls.forEach(async (url, index, array) => {
-            let ogurl = url
-            let url2 = undefined
-            if (url.includes("zip.azael.moe/u/")) {
-              const url2 = url.replace("zip.azael.moe/u/", "zip.azael.moe/raw/");
-              url = await downloadUploadDeleteImage(url2);
-            }
+      this.oldcommand.handle(message);
 
-            else {
-              url = await downloadUploadDeleteImage(ogurl)
-            }
-            const encodedUrl = await Encode(url);
-            message.content = message.content.replace(ogurl, encodedUrl);
-            if (index === array.length - 1) resolve();
-          })
-        })
-        prom.then(() => {
-          if (this.shouldBroadcastMessage(message)) {
-            if (message.channel.id == config.discord.channels.officerChannel) return
-            let catContent = message.content.replace(/<[@|#|!|&]{1,2}(\d+){16,}>/g, '\n')
-              .replace(/<:\w+:(\d+){16,}>/g, '\n')
-              .replace(/<.*:\d{16,20}>/g, "\n")
-              .split('\n')
-              .map(part => {
-                part = part.trim()
-
-                return part.length == 0 ? '' : part + ' '
-              })
-              .join('')
-            bridge.postToPeer("/api/command", { message: `/gc ${message.member.displayName}: ${catContent}` });
-            this.discord.broadcastMessage({
-              username: message.member.displayName,
-              message: catContent
-            })
-          }
-        })
-        return
-      }
       const content = this.stripDiscordContent(message).trim();
       if (content.length === 0 && message.attachments.size === 0) {
         return;
@@ -300,14 +127,17 @@ class MessageHandler {
         for (const attachment of images) {
           try {
             const imgurLink = await downloadUploadDeleteImage(attachment)
-            const encodedLink = await Encode(imgurLink)
+            const encodedLink = encode(imgurLink)
             messageData.message = messageData.message.replace(attachment, encodedLink);
 
             if (messageData.message.includes(encodedLink) === false) {
               messageData.message += ` ${encodedLink}`;
             }
           } catch (error) {
-            messageData.message += ` ${attachment}`;
+            // Not an uploadable image: keep the link as-is (http words are already in the text)
+            if (messageData.message.includes(attachment) === false) {
+              messageData.message += ` ${attachment}`;
+            }
           }
         }
       }

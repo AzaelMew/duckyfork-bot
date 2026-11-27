@@ -345,7 +345,7 @@ describe("features.imageCompression", () => {
 
   it("skips compression when the flag is off", () => {
     const source = fs.readFileSync(path.join(ROOT, "src/discord/handlers/MessageHandler.js"), "utf8");
-    expect(source).toContain("config.features.imageCompression ? await compressImage(filePath) : null");
+    expect(source).toContain("config.features.imageCompression && buffer.length > COMPRESS_THRESHOLD_BYTES");
     expect(source).not.toMatch(/^const sharp = require/m);
   });
 });

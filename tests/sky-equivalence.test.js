@@ -12,7 +12,6 @@
  *   src/contracts/DiscordCommand.js:8     POST /api/command {message}
  *   src/discord/DiscordManager.js:17      POST /api/message {author, guild:"aria", message, type, guildRank}
  *   src/discord/DiscordManager.js:316     POST /api/message {... type:"Officer" ...}
- *   src/discord/handlers/MessageHandler.js:14,273  POST /api/command {message}
  *   src/minecraft/MinecraftManager.js:18,99        POST /api/command {message}
  *   src/minecraft/handlers/ChatHandler.js:239,378-507  POST /api/command {message}
  *   src/minecraft/commands/onlineCommand.js:489    POST /api/online {message:"a"}
@@ -190,7 +189,6 @@ describe("no hardcoded peer left in the tree", () => {
       ["src/contracts/minecraftCommand.js", 2, "/api/command"],
       ["src/contracts/DiscordCommand.js", 1, "/api/command"],
       ["src/discord/DiscordManager.js", 1, "/api/message"],
-      ["src/discord/handlers/MessageHandler.js", 1, "/api/command"],
       ["src/minecraft/MinecraftManager.js", 1, "/api/command"],
       ["src/minecraft/handlers/ChatHandler.js", 7, "/api/command"],
       ["src/minecraft/commands/onlineCommand.js", 1, "/api/online"],
